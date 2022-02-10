@@ -1,5 +1,7 @@
 # imports
 import random
+# import matplotlib.pyplot as plt
+# from tabulate import tabulate
 
 # constants
 BUILD_BINOMIAL_RANGE = 10
@@ -118,6 +120,75 @@ second_test_wolfram = [8, 13, -65, -1, 23, -58, 22, 100, 1, 1, -24]
 # poly_mult_test(second_test_poly_a , second_test_poly_b , second_test_wolfram)
 
 
+def poly_adder(first_polynomial , *other_polynomials):
+    """Adds polynomials"""
+
+    result_polynomial = first_polynomial.copy()
+
+    for polynomial in other_polynomials:
+        for poly_pos in range(max(len(result_polynomial) , len(polynomial))):
+            if len(result_polynomial) <= poly_pos:
+                result_polynomial += [0]
+            b = polynomial[poly_pos] if len(polynomial) > poly_pos else 0
+            result_polynomial[poly_pos] += b
+    return result_polynomial
+
+
+print("Addition Test: ", poly_adder([1 , 1 , 1] , [1 , 2 , 1 , 2] , [] , [7]))
+
+
+def poly_subtractor(first_polynomial , subtracting_polynomial = None):
+    """Subtracts subtracting_polynomial from first_polynomial"""
+    if subtracting_polynomial is None:
+        subtracting_polynomial = [0]
+
+    result_polynomial = []
+
+    for poly_pos in range(max(len(first_polynomial) , len(subtracting_polynomial))):
+        a = first_polynomial[poly_pos] if len(first_polynomial) > poly_pos else 0
+        b = subtracting_polynomial[poly_pos] if len(subtracting_polynomial) > poly_pos else 0
+        result_polynomial += [a - b]
+    while len(result_polynomial) > 1 and result_polynomial[-1] == 0:
+        del result_polynomial[-1]
+    return result_polynomial
+
+
+print("Subract Test: " , poly_subtractor([1 , 1 , 1] , [1 , 2 , 1 , 2]))
+
+
+def poly_divider(dividend_polynomial , divisor = None):
+    """
+    Divides a polynomial by another polynomial.
+
+    :param dividend_polynomial: coefficients of one polynomial (the dividend)
+    :type dividend_polynomial: list[int]
+    :param divisor: coefficients of a second polynomial (the divisor) (default is [1] (function returns dividend_polynomial))
+    :type divisor: list[int]
+    :return: tuple[list[int] , list[int]] list of coefficients of the polynomial division quotient & list remaineders
+    """
+
+    if divisor is None:
+        divisor = [1]
+
+    result = []
+    dividend_remaining = dividend_polynomial
+    while poly_degree(dividend_remaining) >= poly_degree(divisor):
+        leading_term_coeff = dividend_remaining[-1]
+        leading_term_degree = poly_degree(dividend_remaining)
+        partial_quotient_coeff = int(leading_term_coeff / divisor[-1])
+        partial_quotient_degree = leading_term_degree - poly_degree(divisor)
+        partial_quotient_poly = [0] * (partial_quotient_degree + 1)
+        partial_quotient_poly[-1] = partial_quotient_coeff
+        result = poly_adder(partial_quotient_poly , result)
+
+        poly_to_subtract = poly_multiplier(divisor , partial_quotient_poly)
+        dividend_remaining = poly_subtractor(dividend_remaining , poly_to_subtract)
+    return result , dividend_remaining
+
+
+print("Division Test: " , poly_divider([1 , 2 , 1] , [1 , 1]))
+
+
 def poly_maker(degree , build_binomial_lower = -BUILD_BINOMIAL_RANGE , build_binomial_upper = BUILD_BINOMIAL_RANGE , only_int_roots = False):
     """
     Generates a polynomial's coefficients by randomly generating factors and then expanding those factors
@@ -131,7 +202,7 @@ def poly_maker(degree , build_binomial_lower = -BUILD_BINOMIAL_RANGE , build_bin
     :type degree: int
     :param build_binomial_lower: lower bound of randomly generated binomials' coefficients; the a & b in: (b , ax)
     :param build_binomial_upper: upper bound of randomly generated binomials' coefficients; the a & b in: (b , ax)
-    :param only_int_roots: self explanatory; sets a to be 1 or -1
+    :param only_int_roots: self explanatory; sets a in binomials to be 1 or -1
     :type only_int_roots: bool
     :returns: list of polynomial coefficients (list[int]) and the roots of that polynomial (list[float])
     """
@@ -336,45 +407,47 @@ def poly_relative_extrema(poly_coefficient_list):
     return rel_maxima , rel_minima
 
 
-def root_reorderer(poly_roots , remove_repeats = False):
+def root_reorderer(unordered_poly_roots , remove_repeats = False , *parallel_sorting_lists):
     """
     Orders the roots of a list from most negative to most positive (smallest to largest).
 
-    :param poly_roots: the list of roots that will be sorted
-    :type poly_roots: list[float]
+    :param unordered_poly_roots: the list of roots that will be sorted
+    :type unordered_poly_roots: list[float]
     :param remove_repeats: whether repeated roots will be removed (whether [1 , 0 , 0] will be turned into [0 , 1]) (default False)
     :type remove_repeats: bool
-    :return: list[float] reordered list of roots
+    :param parallel_sorting_lists: lists that will be rearranged the same way unordered_poly_roots is, in case values need to line up (so lists [6 , 4 , 5] and [0 , 1 , 2] turn into [4 , 5 , 6] and [1 , 2 , 0])
+    :return: list[float] reordered list of roots and all the newly sorted *parallel_sorting_lists, if any, in the order they were input
     """
 
-    # root_reorderer([6 , 4 , 8 , 8 , 5 , 7 , 9 , 10] , True)
-    # loops = 7
-    # i = 0
-    # j = 0
-    # [8 , 8 , 5 , 7 , 9 , 10]
-    # [4 , 6]
+    reordered_roots = [0.0]
+    reordered_roots[0] = unordered_poly_roots[0]
+    if remove_repeats:
+        for i in range(unordered_poly_roots.count(poly_roots[0])):
+            unordered_poly_roots.remove(poly_roots[0])
+    else:
+        del unordered_poly_roots[0]
 
-    loops = len(poly_roots)
-    reordered_roots = []
-    while len(poly_roots) > 0:
-        if poly_roots[i] > reordered_roots[i]:
-            for j in range(len(reordered_roots)):
-                if poly_roots[i] > reordered_roots[-j - 1]:
-                    reordered_roots.insert((-j - 1) , poly_roots[i])
-                break
-        elif poly_roots[i] < reordered_roots[i]:
-            for j in range(reordered_roots):
-                if poly_roots[i] < reordered_roots[j]:
-                    if j == 0:
-                        reordered_roots = [poly_roots[j]] + reordered_roots
-                    else:
-                        reordered_roots.insert(j - 1 , poly_roots[j])
-                    break
+    while len(unordered_poly_roots) > 0:
+        new_position = 0
+        item = unordered_poly_roots[0]
+        while new_position < len(reordered_roots) and item > reordered_roots[new_position]:
+            new_position += 1
+
+        if new_position == len(reordered_roots):
+            reordered_roots.append(item)
+        else:
+            reordered_roots.insert(new_position , item)
+
+        if remove_repeats:
+            for i in range(unordered_poly_roots.count(item)):
+                unordered_poly_roots.remove(item)
+        else:
+            del unordered_poly_roots[0]
+
+    return reordered_roots
 
 
-print(root_reorderer([6 , 4 , 8 , 8 , 5 , 7 , 9 , 10] , True))
-# for i in range(1):
-#    print("Hello World")
+print(root_reorderer([6 , 4 , 8 , 8 , 5 , 7 , 9 , 10] , False))
 
 
 def poly_root(poly_coefficient_list , max_steps = 10 , epsilon = 1e-8 , starting_guess_count = None , random_starting_guesses = True , factor_roots = False , retry_root_failures = False , sort_roots = False):
@@ -432,7 +505,7 @@ def poly_root(poly_coefficient_list , max_steps = 10 , epsilon = 1e-8 , starting
             steps_needed += [step_number]
         else:
             failed_roots += ["x = {:.3f} | y = {:.3f}".format(current_guess , current_value)]
-    return poly_roots , steps_needed , failed_roots
+    return poly_roots , steps_needed , starting_guesses , failed_roots
 
 
 # print("RAND TEST: ", random.random() * 10 ** 2)
@@ -444,7 +517,7 @@ print("=========================================================================
 print(poly_printer(new_poly , desmos_format = True))
 print(poly_printer(new_poly))
 print()
-(calc_roots , calc_steps , fail_roots) = poly_root(new_poly , max_steps = 4096 , epsilon = 1e-6)
+(calc_roots , calc_steps , starting_guesses , fail_roots) = poly_root(new_poly , max_steps = 4096 , epsilon = 1e-6)
 print("Poly Coeff: ", new_poly)
 print("Real Roots: ", new_poly_roots)
 print("Calc Roots: ", calc_roots)
@@ -491,6 +564,43 @@ class TooManyPoly(Exception):
     def __init__(self , message = "Read the docstring"):
         self.message = message
         super().__init__(self.message)
+
+
+def charter(poly_coefficient_list , poly_roots , steps_needed , starting_guesses , failed_roots = [] , epsilon = None , print_poly = False , print_poly_degree = False):
+    """
+    Puts a given polynomial and some information about that polynomial in handy chart form 
+    
+    :param poly_coefficient_list: List coefficients for a polynomial
+    :type poly_coefficient_list: list[int]
+    :param poly_roots: List roots for a polynomial
+    :type poly_roots: list[float]
+    :param steps_needed: List of steps Newton's method needed to get to each root
+    :type steps_needed: list[int]
+    :param starting_guesses: List values of the starting guesses that correspond to the roots Newton's method landed on
+    :type starting_guesses: list[float]
+    :param failed_roots: The roots that Newton's method failed to get. Only here so output of poly_roots can be directly input
+    :type failed_roots: list[str]
+    :param epsilon: the epsilon value used in Newton's method. If one is given, then it is printed before the chart
+    :type epsilon: float
+    :param print_poly: If the polynomial (in math language) is printed before the chart. Default no
+    :type print_poly: bool
+    :param print_poly_degree: If the polynomial's degree is printed before the chart. Default no
+    :type print_poly_degree: bool
+    :return: None; prints output
+    """
+
+    # assign data
+    mydata = [{"Nikhil" , "Delhi"} ,
+              {"Ravi" , "Kanpur"} ,
+              {"Manish" , "Ahmedabad"} ,
+              {"Prince" , "Bangalore"}]
+
+    # create header
+    head = ["Name" , "City"]
+
+    # display table
+    print(tabulate(mydata , headers = head , tablefmt = "grid"))
+
 
 
 def tester(wolfram_answer , x = 1.0 , *test_type , **polynomials):
