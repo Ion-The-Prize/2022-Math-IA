@@ -14,13 +14,15 @@ class CalculatedRoot:
 
     x_value = None
     y_value = None
-    steps_needed = None
+    steps_taken = None
     root_was_found = None
+    starting_guess = None
 
-    def __init__(self , x_value , y_value , steps_needed , root_was_found = True):
+    def __init__(self , x_value , y_value , steps_taken , starting_guess , root_was_found = True):
         self.x_value = x_value
         self.y_value = y_value
-        self.steps_needed = steps_needed
+        self.steps_taken = steps_taken
+        self.starting_guess = starting_guess
         self.root_was_found = root_was_found
 
     def was_found(self):
@@ -46,6 +48,10 @@ class Polynomial:
         self.poly_coefficients_list = poly_coefficients_list
         self.poly_roots = poly_roots
         self.poly_degree = len(poly_coefficients_list) - 1
+
+
+    def __eq__(self, other):
+        return self.poly_coefficients_list == other.poly_coefficients_list
 
 
     def poly_printer(self , desmos_format = False):
@@ -96,7 +102,7 @@ class Polynomial:
         return self.poly_degree
 
 
-    def poly_multiplier(self , polynomial_second = None):
+    def multiply(self , polynomial_second = None):
         """
         Multiplies two polynomials' coefficients with each other.
 
@@ -137,7 +143,7 @@ class Polynomial:
         return Polynomial(result_coefficients_list , result_roots)
 
 
-    def poly_adder(self , *other_polynomials):
+    def add(self , *other_polynomials):
         """Adds polynomials, returns Polynomial sum"""
 
         result_coefficients_list = self.poly_coefficients_list.copy()
@@ -151,7 +157,7 @@ class Polynomial:
         return Polynomial(result_coefficients_list)
 
 
-    def poly_subtractor(self , subtracting_polynomial = None):
+    def subtract(self , subtracting_polynomial = None):
         """Subtracts subtracting_polynomial from self"""
         if subtracting_polynomial is None:
             subtracting_polynomial = Polynomial([0])
@@ -167,7 +173,7 @@ class Polynomial:
         return Polynomial(result_coefficients_list)
 
 
-    def poly_divider(self , divisor = None):
+    def divide(self , divisor = None):
         """
         Divides a self by another polynomial.
 
@@ -187,10 +193,10 @@ class Polynomial:
             partial_quotient_coeff = float(leading_term_coeff / divisor.poly_coefficients_list[-1])  # worried about mixing int and float (despite doing it everywhere)
             partial_quotient_degree = leading_term_degree - divisor.get_degree()
             partial_quotient_poly = build_a_monomial(partial_quotient_coeff , partial_quotient_degree)
-            result = result.poly_adder(partial_quotient_poly)
+            result = result.add(partial_quotient_poly)
 
-            poly_to_subtract = divisor.poly_multiplier(partial_quotient_poly)
-            remainder_polynomial = remainder_polynomial.poly_subtractor(poly_to_subtract)
+            poly_to_subtract = divisor.multiply(partial_quotient_poly)
+            remainder_polynomial = remainder_polynomial.subtract(poly_to_subtract)
         return result , remainder_polynomial
 
 
@@ -234,7 +240,7 @@ class Polynomial:
         return root
 
 
-    def tangent_line(self , x):
+    def get_tangent_line(self , x):
         """
         Invokes evaluate & poly_primer to generate a tangent line
 
@@ -251,7 +257,7 @@ class Polynomial:
         return Polynomial([y_intercept , slope] , [x_intercept])
 
 
-    def poly_relative_extrema(self):
+    def get_relative_extrema(self):
         """
         Given a Polynomial with degree >1, returns tuple lists of x values of relative maxima and minima
 
@@ -281,7 +287,7 @@ class Polynomial:
     def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8):
         """
 
-        
+
         :param poly_coefficient_list:
         :param starting_x:
         :param max_steps:
@@ -296,16 +302,16 @@ class Polynomial:
             step_number += 1
             if step_number > max_steps:
                 break
-            new_guess = self.tangent_line(current_guess).poly_roots[0]  # new_guess = x_intercept of tangent line
+            new_guess = self.get_tangent_line(current_guess).poly_roots[0]  # new_guess = x_intercept of tangent line
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
         if abs(current_value) < epsilon:
-            return CalculatedRoot(current_guess , current_value , step_number)
+            return CalculatedRoot(current_guess , current_value , step_number , starting_x)
         else:
-            return CalculatedRoot(current_guess , current_value , max_steps , False)
+            return CalculatedRoot(current_guess , current_value , max_steps , starting_x , root_was_found = False)
 
 
-    def get_roots(self , max_steps = 10 , epsilon = 1e-8 , starting_guess_count = get_degree() ,
+    def get_roots(self , max_steps = 10 , epsilon = 1e-8 , starting_guess_count = None ,
                   random_starting_guesses = True , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
                   guess_range_max = BUILD_BINOMIAL_RANGE + 1, factor_roots = False , sort_roots = False):
         """
@@ -327,8 +333,11 @@ class Polynomial:
         :type factor_roots: bool
         :param sort_roots: whether the final roots string will be sorted from most negative to most positive (and repeats removed) (default False)
         :type sort_roots: bool
-        :return: triple[list(CalculatedRoot (successful roots)) , list(starting_guesses) , list(CalculatedRoot (failed roots))]
+        :return: tuple[list(CalculatedRoot (successful roots)) , list(CalculatedRoot (failed roots))]
         """
+
+        if starting_guess_count is None:
+            starting_guess_count = self.get_degree()
 
         # will be subbed in for the farthest relative extrema once that's built
 
@@ -349,7 +358,7 @@ class Polynomial:
                 poly_roots += [newton_result]
             else:
                 failed_roots += [newton_result]
-        return poly_roots , starting_guesses , failed_roots
+        return poly_roots , failed_roots
 
 
     def poly_power(self , power , pascal = 0):
@@ -368,7 +377,7 @@ class Polynomial:
         current_answer = Polynomial([1] , [])
 
         for i in range(power):
-            current_answer = current_answer.poly_multiplier(self)
+            current_answer = current_answer.multiply(self)
             if pascal != 0:
                 print(i ,
                       current_answer.poly_coefficients_list)  # numbers rows of pascal's triangle as degree of poly from a binomial (so [1 2 1] is row 2)
@@ -393,6 +402,7 @@ def build_a_monomial(leading_coefficient , degree):
 def randomly_build_a_binomial(rand_lower_bound = -BUILD_BINOMIAL_RANGE , rand_upper_bound = BUILD_BINOMIAL_RANGE , only_int_roots = False):
     """
     Randomly generates a binomial with the format ax + b, where a and b are integers
+    Note: sometimes, a or b will be 0, in which case it returns a monomial
 
     :param rand_lower_bound: the lower bound of the coefficients
     :param rand_upper_bound: the upper bound of the coefficients
@@ -443,7 +453,7 @@ def poly_maker(degree , rand_binomial_lower = -BUILD_BINOMIAL_RANGE , rand_binom
 
     for i in range(degree):
         binomial = randomly_build_a_binomial(rand_binomial_lower , rand_binomial_upper , only_int_roots = only_int_roots)
-        result_poly = binomial.poly_multiplier(result_poly)
+        result_poly = binomial.multiply(result_poly)
 
     return result_poly
 
@@ -468,73 +478,72 @@ for i in range(6):
 
 def poly_mult_test(first_poly , second_poly , answer):
     """
-    Test of poly_multiplier
-    Compares the product of two polynomials multiplied using poly_multiplier with WolframAlpha's result
+    Test of multiply
+    Compares the product of two polynomials multiplied using multiply with WolframAlpha's result
     """
-    print("me: ", poly_multiplier(first_poly , second_poly))
+    print("me: " , first_poly.multiply(second_poly))
     print("wo: ", answer)
 
-    if poly_multiplier(first_poly, second_poly) == answer:
+    if first_poly.multiply(second_poly) == answer:
         print("Wolfram alpha agrees")
     else:
         print("Wolfram alpha disagrees")
     return
 
 
-first_test_poly_a = [-3, -1, -4, 9, -1, -1]
-first_test_poly_b = [8, -3, -10, -2, -5, -8]
-first_test_wolfram = [-24, 1, 1, 100, 22, -58, 23, -1, -65, 13, 8]
+first_mult_test_poly_a = Polynomial([-3, -1, -4, 9, -1, -1])
+first_mult_test_poly_b = Polynomial([8, -3, -10, -2, -5, -8])
+first_mult_test_wolfram = Polynomial([-24, 1, 1, 100, 22, -58, 23, -1, -65, 13, 8])
 # (-3x^5 - 1x^4 - 4x^3 + 9x^2 - 1x - 1) * (8x^5 - 3x^4 - 10x^3 - 2x^2 - 5x - 8)
-second_test_poly_a = [-1, -1, 9, -4, -1, -3]
-second_test_poly_b = [-8, -5, -2, -10, -3, 8]
-second_test_wolfram = [8, 13, -65, -1, 23, -58, 22, 100, 1, 1, -24]
+second_mult_test_poly_a = Polynomial([-1, -1, 9, -4, -1, -3])
+second_mult_test_poly_b = Polynomial([-8, -5, -2, -10, -3, 8])
+second_mult_test_wolfram = Polynomial([8, 13, -65, -1, 23, -58, 22, 100, 1, 1, -24])
 # [-24, 1, 1, 100, 22, -58, 23, -1, -65, 13, 8]
 
-# poly_mult_test(first_test_poly_a , first_test_poly_b , first_test_wolfram)
-# poly_mult_test(second_test_poly_a , second_test_poly_b , second_test_wolfram)
+poly_mult_test(first_mult_test_poly_a , first_mult_test_poly_b , first_mult_test_wolfram)
+poly_mult_test(second_mult_test_poly_a , second_mult_test_poly_b , second_mult_test_wolfram)
 
+add_test_poly_a = Polynomial([1 , 1 , 1])
+add_test_poly_b = Polynomial([1 , 2 , 1 , 2])
+add_test_poly_c = Polynomial([])
+add_test_poly_d = Polynomial([7])
+print("Addition Test: ", add_test_poly_a.add(add_test_poly_b , add_test_poly_c , add_test_poly_d))
 
-print("Addition Test: ", poly_adder([1 , 1 , 1] , [1 , 2 , 1 , 2] , [] , [7]))
+subtract_test_poly_a = Polynomial([1 , 1 , 1])
+subtract_test_poly_b = Polynomial([1 , 2 , 1 , 2])
+print("Subract Test: " , subtract_test_poly_a.subtract(subtract_test_poly_b))
 
-
-print("Subract Test: " , poly_subtractor([1 , 1 , 1] , [1 , 2 , 1 , 2]))
-
-
-print("Division Test: " , poly_divider([1 , 2 , 1] , [1 , 1]))
+divide_test_poly_a = Polynomial([1 , 2 , 1])
+divide_test_poly_b = Polynomial([1 , 1])
+print("Division Test: " , divide_test_poly_a.divide(divide_test_poly_b))
 
 
 print("{:.2f}".format(3.14159))
-(poly_coeff, poly_roots) = poly_maker(5)
-print(poly_coeff)
-print(list(reversed(poly_coeff)))
-print(poly_coeff)
-print(list(map(lambda num : float("{:.3f}".format(num)), poly_roots)))
+testing_polynomial = poly_maker(7)
+print(testing_polynomial.poly_coefficients_list)
+print("Printer Test: ", testing_polynomial.poly_printer())
+# print(list(reversed(testing_polynomial.poly_coefficients_list)))
+# print(testing_polynomial.poly_coefficients_list)
+# print(list(map(lambda num : float("{:.3f}".format(num)), testing_polynomial.poly_roots)))
 
+print("value at x = 1: ", testing_polynomial.evaluate(1))
 
-print("value at x = 1: ", poly_value(1 , poly_coeff))
+print(testing_polynomial.poly_primer().poly_coefficients_list)
+print("prime value @ x = 1: ", testing_polynomial.poly_primer().evaluate(1))
+print("tangent line @x = 1: ", testing_polynomial.get_tangent_line(1).poly_coefficients_list)
+print("x-intercept of line: ", testing_polynomial.get_tangent_line(1).poly_roots)
 
-
-print(poly_primer(poly_coeff))
-
-
-# print("prime value: ", poly_value(1 , poly_primer(first_test_poly_a)))
-print("value @ x = 1: ", poly_value(1, first_test_poly_a))
-print(first_test_poly_a)
-print("tan: ", tangent_line(1 , first_test_poly_a))
-
-print("x-int: ", x_intercept(tangent_line(1 , first_test_poly_a)))
-
-def tangent_test(x , poly_coefficient_list , answer):
+def tangent_test(x , polynomial , answer):
     """
-    Test of tangent_line
-    Compares the x-intercept of a polynomial's tangent line found using poly_multiplier with WolframAlpha's result
+    Test of get_tangent_line
+    Compares the x-intercept of a polynomial's tangent line found using multiply with WolframAlpha's result
     """
 
     print("BEGIN TAN_TEST")
-    print("me: ", tangent_line(x , poly_coefficient_list))
-    print("wo: ", answer)
+    print("mine: ", polynomial.get_tangent_line(x).poly_coefficients_list)
+    print("wolf: ", answer)
 
-    if tangent_line(x , poly_coefficient_list) == answer:
+    if polynomial.get_tangent_line(x).poly_coefficients_list == answer:
         print("Wolfram alpha agrees")
     else:
         print("Wolfram alpha disagrees")
@@ -542,13 +551,8 @@ def tangent_test(x , poly_coefficient_list , answer):
 
 
 # wolfram alpha input (-3 - x - 4x^2 + 9x^3 - 1x^4 - 1x^5)
-# first_test_poly_a = [-3, -1, -4, 9, -1, -1]
-tangent_test(1 , first_test_poly_a , [-10 , 9])
-
-
-print("WOLF COPY: ", poly_printer(poly_maker(20)[0]))
-print("PRIME TEST: ", poly_primer([2]))
-print(poly_degree(poly_primer([2])))
+tangent_test_poly = Polynomial([-3, -1, -4, 9, -1, -1])
+tangent_test(1 , tangent_test_poly , [-10 , 9])
 
 
 class NotPoly:
@@ -568,7 +572,8 @@ def root_reorderer(unordered_poly_roots , remove_repeats = False , *parallel_sor
     :param parallel_sorting_lists: lists that will be rearranged the same way unordered_poly_roots is, in case values need to line up (so lists [6 , 4 , 5] and [0 , 1 , 2] turn into [4 , 5 , 6] and [1 , 2 , 0])
     :return: list[float] reordered list of roots and all the newly sorted *parallel_sorting_lists, if any, in the order they were input
     """
-
+    reordered_roots = []
+    """
     if remove_repeats:
         for i in range(len(unordered_poly_roots) - 1):
             root = unordered_poly_roots[i]
@@ -601,7 +606,7 @@ def root_reorderer(unordered_poly_roots , remove_repeats = False , *parallel_sor
                 unordered_poly_roots.remove(item)
         else:
             del unordered_poly_roots[0]
-
+    """
     return reordered_roots
 
 
@@ -613,15 +618,15 @@ for i in range(10):
     print()
 print("=====================================================================================================")
 
-(new_poly , new_poly_roots) = poly_maker(9)
-print(poly_printer(new_poly , desmos_format = True))
-print(poly_printer(new_poly))
+new_poly = poly_maker(9)
+print(new_poly.poly_printer(desmos_format = True))
+print(new_poly.poly_printer())
 print()
-(calc_roots , calc_steps , starting_guesses , fail_roots) = poly_root(new_poly , max_steps = 4096 , epsilon = 1e-6)
-print("Poly Coeff: ", new_poly)
-print("Real Roots: ", new_poly_roots)
-print("Calc Roots: ", calc_roots)
-print("Roots Step: ", calc_steps)
+calc_roots , fail_roots = new_poly.get_roots(max_steps = 4096 , epsilon = 1e-6)
+print("Poly Coeff: ", new_poly.poly_coefficients_list)
+print("Real Roots: ", new_poly.poly_roots)
+print("Calc Roots: ", [root.x_value for root in calc_roots])
+print("Roots Step: ", [root.steps_taken for root in calc_roots])
 print("Fail Roots: ", fail_roots)
 
 """
@@ -646,21 +651,21 @@ def MakePolyAndBarcodeIt(poly_degree, minimum, maximum, window_width , epsilon =
 
     assert(maximum > minimum)
 
-    poly , poly_roots = poly_maker(poly_degree)
+    poly = poly_maker(poly_degree)
     increment = (maximum - minimum) / window_width
 
     barcode.init(minimum , maximum , window_width , 200 , poly_degree+1)
 
     for i in range(window_width):
         x = minimum + (i * increment)
-        root , steps = poly_Newton(poly , x , 4096, epsilon)
+        root = poly.get_newton_root_from_point(starting_x = x , max_steps = 4096, epsilon = epsilon)
         if root:
-            for r in range(len(poly_roots)):
-                if abs(root - poly_roots[r]) < epsilon:
-                    barcode.add_bar(x , color_num = r , y = 10 * steps)
+            for r in range(len(poly.poly_roots)):
+                if abs(root.x_value - poly.poly_roots[r]) < epsilon:
+                    barcode.add_bar(x , color_num = r , y = 10 * root.steps_taken)
                     break
-    for r in range(len(poly_roots)):
-        barcode.add_bar(poly_roots[r], poly_degree, y=10)
+    for r in range(len(poly.poly_roots)):
+        barcode.add_bar(x = poly.poly_roots[r], color_num = poly_degree, y=10)
 
 
 MakePolyAndBarcodeIt(5 , -15 , 15 , 1100)
