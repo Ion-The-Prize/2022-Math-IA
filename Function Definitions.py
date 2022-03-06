@@ -674,7 +674,7 @@ def MakePolyAndBarcodeIt(poly_degree, minimum, maximum, window_width , epsilon =
     for r in range(len(poly.poly_roots)):
         barcode.add_bar(x = poly.poly_roots[r], color_num = poly_degree, y=10)
 
-
+input("Press Enter to continue...")
 MakePolyAndBarcodeIt(5 , -15 , 15 , 1100)
 while True:
     barcode.draw()
