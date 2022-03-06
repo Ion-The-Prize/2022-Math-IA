@@ -4,6 +4,8 @@ import random
 # from tabulate import tabulate
 
 # constants
+import barcode
+
 BUILD_BINOMIAL_RANGE = 10
 
 
@@ -450,6 +452,32 @@ def root_reorderer(unordered_poly_roots , remove_repeats = False , *parallel_sor
 print(root_reorderer([6 , 4 , 8 , 8 , 5 , 7 , 9 , 10] , False))
 
 
+def poly_Newton(poly_coefficient_list , starting_point , max_steps = 10 , epsilon = 1e-8):
+    """
+
+    :param poly_coefficient_list:
+    :param starting_point:
+    :param max_steps:
+    :param epsilon:
+    :return:
+    """
+
+    current_guess = starting_point
+    current_value = poly_value(current_guess , poly_coefficient_list)
+    step_number = 0
+    while abs(current_value) > epsilon:
+        step_number += 1
+        if step_number > max_steps:
+            break
+        new_guess = x_intercept(tangent_line(current_guess , poly_coefficient_list))
+        current_guess = new_guess
+        current_value = poly_value(current_guess , poly_coefficient_list)
+    if abs(current_value) < epsilon:
+        return current_guess , step_number
+    else:
+        return None , max_steps
+
+
 def poly_root(poly_coefficient_list , max_steps = 10 , epsilon = 1e-8 , starting_guess_count = None , random_starting_guesses = True , factor_roots = False , retry_root_failures = False , sort_roots = False):
     """
     Uses Newton's method for finding roots of higher order polynomials.
@@ -559,6 +587,39 @@ def poly_power(power, seed_polynomial = [1 , 1] , pascal = 0):
 
 # print(poly_printer(poly_power(10, pascal = 0)))
 
+
+def MakePolyAndBarcodeIt(poly_degree, minimum, maximum, window_width , epsilon = 1e-8):
+    """
+
+    :param poly_degree:
+    :param minimum:
+    :param maximum:
+    :param window_width:
+    :return:
+    """
+
+    assert(maximum > minimum)
+
+    poly , poly_roots = poly_maker(poly_degree)
+    increment = (maximum - minimum) / window_width
+
+    barcode.init(minimum , maximum , window_width , 200 , poly_degree+1)
+
+    for i in range(window_width):
+        x = minimum + (i * increment)
+        root , steps = poly_Newton(poly , x , 4096, epsilon)
+        if root:
+            for r in range(len(poly_roots)):
+                if abs(root - poly_roots[r]) < epsilon:
+                    barcode.add_bar(x , color_num = r , y = 10 * steps)
+                    break
+    for r in range(len(poly_roots)):
+        barcode.add_bar(poly_roots[r], poly_degree, y=10)
+
+
+MakePolyAndBarcodeIt(5 , -15 , 15 , 1100)
+while 1 == 1:
+    barcode.draw()
 
 class TooManyPoly(Exception):
     def __init__(self , message = "Read the docstring"):
