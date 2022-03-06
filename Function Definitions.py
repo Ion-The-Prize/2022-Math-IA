@@ -25,6 +25,12 @@ class CalculatedRoot:
         self.starting_guess = starting_guess
         self.root_was_found = root_was_found
 
+    def __str__(self):
+        if self.root_was_found:
+            return "x={:.3f} | steps={:d} | start={:.3f}".format(self.x_value , self.steps_taken , self.starting_guess)
+        else:
+            return "FAIL: x={:.3f} | y={:.3e} | steps={:d} | start={:.3f}".format(self.x_value , self.y_value , self.steps_taken , self.starting_guess)
+
     def was_found(self):
         return self.root_was_found
 
@@ -421,7 +427,7 @@ def randomly_build_a_binomial(rand_lower_bound = -BUILD_BINOMIAL_RANGE , rand_up
             a = random.randrange(rand_lower_bound , rand_upper_bound + 1)
 
     root = Polynomial([b , a]).get_linear_root()
-    return Polynomial([b , a] , root)
+    return Polynomial([b , a] , [root])
 
 
 def make_polynomial_from_coefficients(*coefficients):
@@ -481,8 +487,8 @@ def poly_mult_test(first_poly , second_poly , answer):
     Test of multiply
     Compares the product of two polynomials multiplied using multiply with WolframAlpha's result
     """
-    print("me: " , first_poly.multiply(second_poly))
-    print("wo: ", answer)
+    print("mine: " , first_poly.multiply(second_poly).poly_coefficients_list)
+    print("wolf: ", answer.poly_coefficients_list)
 
     if first_poly.multiply(second_poly) == answer:
         print("Wolfram alpha agrees")
@@ -504,18 +510,19 @@ poly_mult_test(first_mult_test_poly_a , first_mult_test_poly_b , first_mult_test
 poly_mult_test(second_mult_test_poly_a , second_mult_test_poly_b , second_mult_test_wolfram)
 
 add_test_poly_a = Polynomial([1 , 1 , 1])
-add_test_poly_b = Polynomial([1 , 2 , 1 , 2])
+add_test_poly_b = Polynomial([1 , 2 , 1 , 0 , 2])
 add_test_poly_c = Polynomial([])
 add_test_poly_d = Polynomial([7])
-print("Addition Test: ", add_test_poly_a.add(add_test_poly_b , add_test_poly_c , add_test_poly_d))
+print("Addition Test: ", add_test_poly_a.add(add_test_poly_b , add_test_poly_c , add_test_poly_d).poly_coefficients_list)
 
 subtract_test_poly_a = Polynomial([1 , 1 , 1])
 subtract_test_poly_b = Polynomial([1 , 2 , 1 , 2])
-print("Subract Test: " , subtract_test_poly_a.subtract(subtract_test_poly_b))
+print("Subract Test: " , subtract_test_poly_a.subtract(subtract_test_poly_b).poly_coefficients_list)
 
 divide_test_poly_a = Polynomial([1 , 2 , 1])
 divide_test_poly_b = Polynomial([1 , 1])
-print("Division Test: " , divide_test_poly_a.divide(divide_test_poly_b))
+quotient , remainder = divide_test_poly_a.divide(divide_test_poly_b)
+print("Division Test: " , quotient.poly_coefficients_list)
 
 
 print("{:.2f}".format(3.14159))
@@ -627,7 +634,7 @@ print("Poly Coeff: ", new_poly.poly_coefficients_list)
 print("Real Roots: ", new_poly.poly_roots)
 print("Calc Roots: ", [root.x_value for root in calc_roots])
 print("Roots Step: ", [root.steps_taken for root in calc_roots])
-print("Fail Roots: ", fail_roots)
+print("Fail Roots: ", ', '.join(str(r) for r in fail_roots))
 
 """
 question_poly = poly_maker(0, -5, 5, only_int_roots = True)
@@ -668,9 +675,9 @@ def MakePolyAndBarcodeIt(poly_degree, minimum, maximum, window_width , epsilon =
         barcode.add_bar(x = poly.poly_roots[r], color_num = poly_degree, y=10)
 
 
-MakePolyAndBarcodeIt(5 , -15 , 15 , 1100)
-while 1 == 1:
-    barcode.draw()
+# MakePolyAndBarcodeIt(5 , -15 , 15 , 1100)
+# while 1 == 1:
+#     barcode.draw()
 
 
 # noinspection PyUnreachableCode
