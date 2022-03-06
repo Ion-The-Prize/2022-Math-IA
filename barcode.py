@@ -8,6 +8,8 @@ def get_rand_color():
    color=color_rgb(r,b,g)
    return color
 
+WHITE=color_rgb(255,255,255)
+
 colors=[]
 
 x_min=None # type: float
