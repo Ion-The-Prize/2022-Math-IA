@@ -229,7 +229,8 @@ class Polynomial:
         """Returns x-intercept of a LINEAR EQUATION"""
 
         assert len(self.poly_coefficients_list) == 2
-        assert self.poly_coefficients_list[1] != 0
+        if self.poly_coefficients_list[1] == 0:
+            return None
 
         root = (-1.0 * self.poly_coefficients_list[0]) / self.poly_coefficients_list[1]
         return root
@@ -248,7 +249,10 @@ class Polynomial:
         tangent_line = Polynomial([y_intercept , slope])  # representing tangent eq as my standard polynomial format
         x_intercept = tangent_line.get_linear_root()
 
-        return Polynomial([y_intercept , slope] , [x_intercept])
+        if x_intercept is None:
+            return tangent_line  # (without roots)
+        else:
+            return Polynomial([y_intercept , slope] , [x_intercept])
 
     def get_relative_extrema(self):
         """
@@ -294,13 +298,16 @@ class Polynomial:
             step_number += 1
             if step_number > max_steps:
                 break
-            new_guess = self.get_tangent_line(current_guess).poly_roots[0]  # new_guess = x_intercept of tangent line
+            new_guess_poly = self.get_tangent_line(current_guess)
+            if new_guess_poly.poly_roots is None:
+                return CalculatedRoot(current_guess , current_value , step_number , starting_x , root_was_found = False)
+            new_guess = new_guess_poly.poly_roots[0]  # new_guess = x_intercept of tangent line
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
         if abs(current_value) < epsilon:
             return CalculatedRoot(current_guess , current_value , step_number , starting_x)
         else:
-            return CalculatedRoot(current_guess , current_value , max_steps , starting_x , root_was_found = False)
+            return CalculatedRoot(current_guess , current_value , step_number , starting_x , root_was_found = False)
 
     def get_roots(self , max_steps = 20 , epsilon = 1e-8 , starting_guess_count = None ,
                   random_starting_guesses = True , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
@@ -651,7 +658,7 @@ def tangent_test(x , polynomial , answer):
     Compares the x-intercept of a polynomial's tangent line found using multiply with WolframAlpha's result
     """
 
-    print("BEGIN TAN_TEST")
+    print("Tangent Test")
     print("mine: ", polynomial.get_tangent_line(x).poly_coefficients_list)
     print("wolf: ", answer)
 
@@ -678,13 +685,14 @@ for i in range(10):
     print()
 print("=====================================================================================================")
 
-new_poly = poly_maker(7)
+#new_poly = poly_maker(7)
+new_poly = Polynomial([-540000, 942000, 1270600, -3988780, 2970020, -448640, -277200, 72000] , [-3.3333333333333335, 3.3333333333333335, -0.5, 1.0, 1.2, 1.25, 0.9])
 print(new_poly.poly_printer(desmos_format = True))
 print(new_poly.poly_printer())
 print()
 print("Poly Coeff: ", new_poly.poly_coefficients_list)
 print("Real Roots: ", new_poly.poly_roots)
-calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_steps_before_quitting = 1 , epsilon = 1e-9)
+calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_steps_before_quitting = 50 , epsilon = 1e-9)
 print("Calc Roots: ", [root.x_value for root in calc_roots])
 print("Round Root: ", [root.x_value for root in root_rounder(calc_roots)])
 print("Root Steps: ", [root.steps_taken for root in calc_roots])
@@ -720,25 +728,32 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
     increment = (maximum - minimum) / window_width
 
     global poly_barcode
-    poly_barcode = BarCode(polynomial.poly_printer() , minimum , maximum , window_width , 200 , polynomial.poly_degree + 1)
+    poly_barcode = BarCode("{:s} | Roots @x = {:s}".format(polynomial.poly_printer() , ",".join(["{:.3f}".format(r) for r in sorted(polynomial.poly_roots)]))
+                           , minimum , maximum , window_width , 200 , polynomial.poly_degree + 1)
     poly_barcode.close_on_click()
 
     for i in range(window_width):
+        if i % 100 == 0:
+            poly_barcode.draw()
         x = minimum + (i * increment)
         root = polynomial.get_newton_root_from_point(starting_x = x , max_steps = 4096 , epsilon = epsilon)
-        print("Newton Result: ", root)
+        # print("Newton Result: ", root)
         if root.root_was_found:
             # Looking for what color the root bar should be
             for r in range(len(polynomial.poly_roots)):
                 if abs(root.x_value - polynomial.poly_roots[r]) < epsilon:
-                    poly_barcode.add_bar(x = x , color_num = r , y = 10 * root.steps_taken)
+                    poly_barcode.add_bar(x = x , color_num = r , y = None)
                     break
         else:
-            poly_barcode.add_bar(x = x , color = GREY , y = 5)
+            poly_barcode.add_bar(x = x , color = GREY , y = None)
     for r in range(len(polynomial.poly_roots)):
-        poly_barcode.add_bar(x = polynomial.poly_roots[r] , color = WHITE , y = 10)
+        poly_barcode.add_bar(x = polynomial.poly_roots[r] , color = WHITE , y = None)
     poly_barcode.draw()
+    print("Done drawing")
 
+
+
+#input("Press Enter to continue...")
 BarcodePoly(new_poly , -15 , 15 , 1100)
 poly_barcode.await_click()
 
