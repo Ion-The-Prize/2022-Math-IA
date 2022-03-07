@@ -34,7 +34,7 @@ class Bar:
         barcode.bars[self.x_pix] = self
 
     def draw(self):
-        if ( self.y == None ):
+        if self.y is None :
             y_top=0
         else:
             y_top = self.barcode.get_y_graph_pixel(self.y)
@@ -100,14 +100,14 @@ class BarCode:
       self.pix_per_x = float(self.win_width / self.x_range)
 
     def get_tick_marks(self, min, max, num_tick_marks):
-        if ( min is None or max is None ):
+        if min is None or max is None:
             return []
 
         range = max - min
 
         tick_first = None
         tick_inc = None
-        if (range > num_tick_marks):
+        if range > num_tick_marks:
             # integer mode
             tick_first = math.floor(min) + 1
             tick_inc = round(range / num_tick_marks)
@@ -141,26 +141,26 @@ class BarCode:
         assert(color_item is None or self.item2color[color_item] is not None)
         assert(self.x_min<=x<=self.x_max)
 
-        if (color_num):
+        if color_num:
             color=self.colors[color_num]
 
-        if ( color_item ):
+        if color_item:
             color=self.item2color[color_item]
 
         b=Bar(self, x, color, y)
 
         # Figure out implications of a Y value... do we need to rescale?
         recalculate=False
-        if ( y != None ):
-            if ( self.y_min == None or y < self.y_min ):
+        if y != None:
+            if self.y_min == None or y < self.y_min:
                 #print("Found new y_min: {:.2f}".format(y))
                 self.y_min = y
                 recalculate = True
-            if ( self.y_max == None or y > self.y_max ):
+            if self.y_max == None or y > self.y_max :
                 #print("Found new y_max: {:.2f}".format(y))
                 self.y_max = y
                 recalculate = True
-            if ( recalculate ):
+            if recalculate :
                 if self.y_min == self.y_max:
                     self.y_min = self.y_max - 1
                 self.y_range = self.y_max - self.y_min
@@ -184,7 +184,7 @@ class BarCode:
 
         for x_pix in range(self.win_width):
             bar=self.bars.get(x_pix)
-            if ( bar != None ):
+            if bar != None :
                 bar.draw()
 
         for tick_x in self.x_tick_marks:

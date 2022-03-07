@@ -6,10 +6,20 @@ import random
 import pandas
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy import longdouble
+from math import isclose
 
 # constants
 BUILD_BINOMIAL_RANGE = 10
 
+def floatToString(f):
+    return ('%.6f' % f).rstrip('0').rstrip('.')
+
+def wrap_float(f):
+    """
+    All math-relevant floats are run through here to, perhaps, upgrade them to numpy.longdouble
+    """
+    return longdouble(f)
 
 class CalculatedRoot:
     """A calculated root"""
@@ -52,14 +62,18 @@ class Polynomial:
         :param poly_roots:
         :type poly_roots: list
         """
-        self.poly_coefficients_list = poly_coefficients_list
-        self.poly_roots = poly_roots
+        self.poly_coefficients_list = [wrap_float(c) for c in poly_coefficients_list]
+        if poly_roots:
+            self.poly_roots = [wrap_float(r) for r in poly_roots]
         self.poly_degree = len(poly_coefficients_list) - 1
 
     def __eq__(self, other):
         return self.poly_coefficients_list == other.poly_coefficients_list
 
-    def poly_printer(self , desmos_format = False):
+    def __repr__(self):
+        return self.poly_printer()
+
+    def poly_printer(self , desmos_format = False, coeff_format = None):
         """
         Given a Polynomial, returns that polynomial in math language form
         (e.g. given [-1, 5, 10, 10, -5, 1] and [1], returns x^5 - 5x^4 + 10x^3 - 10x^2 + 5x - 1 )
@@ -69,12 +83,19 @@ class Polynomial:
         :return: string of math language polynomial
         """
 
+        note=""
+        if self.get_degree() == 2:
+            b2_4ac = math.pow(self.poly_coefficients_list[1],2)- 4*self.poly_coefficients_list[2]*self.poly_coefficients_list[0]
+            if b2_4ac<0:
+                note=" [imaginary]"
+
+
         result = ""
         reverse_poly_coefficients_list = list(reversed(self.poly_coefficients_list))
         for i in range(len(reverse_poly_coefficients_list)):
             coefficient = reverse_poly_coefficients_list[i]
             power = self.poly_degree - i
-            if coefficient == 0:
+            if isclose(coefficient, 0) :
                 pass
             else:
                 if len(result) != 0:
@@ -85,20 +106,25 @@ class Polynomial:
                 else:
                     if coefficient < 0:
                         result += "-"
-                coefficient_string = str(abs(coefficient))
-                if coefficient_string == "1" and power != 0:
+                if isclose(abs(coefficient),1) and power != 0:
                     coefficient_string = ""
+                else:
+                    if coeff_format:
+                        coefficient_string = coeff_format.format(abs(coefficient))
+                    else:
+                        coefficient_string = floatToString(abs(coefficient))
+
                 if power == 0:
-                    result += "{:}".format(coefficient_string)  # formats coeff as decimal (integer) number
+                    result += "{}".format(coefficient_string)  # formats coeff as number
                 elif power == 1:
-                    result += "{:}x".format(coefficient_string)
+                    result += "{}x".format(coefficient_string)
                 else:
                     if not desmos_format:
-                        result += "{:}x^{:d}".format(coefficient_string , power)
+                        result += "{}x^{:d}".format(coefficient_string , power)
                     else:
-                        result += "{:}x^{{{:d}}}".format(coefficient_string , power)
+                        result += "{}x^{{{:d}}}".format(coefficient_string , power)
                         # To paste into desmos, the single curly braces are changed into triple curly braces
-        return result
+        return result + note
 
     def get_degree(self):
         """Returns int degree of the polynomial"""
@@ -153,8 +179,8 @@ class Polynomial:
         for polynomial in other_polynomials:
             for poly_pos in range(max(len(result_coefficients_list) , len(polynomial.poly_coefficients_list))):
                 if len(result_coefficients_list) <= poly_pos:
-                    result_coefficients_list += [0]
-                b = polynomial.poly_coefficients_list[poly_pos] if len(polynomial.poly_coefficients_list) > poly_pos else 0
+                    result_coefficients_list += [wrap_float(0)]
+                b = polynomial.poly_coefficients_list[poly_pos] if len(polynomial.poly_coefficients_list) > poly_pos else wrap_float(0)
                 result_coefficients_list[poly_pos] += b
         return Polynomial(result_coefficients_list)
 
@@ -166,10 +192,10 @@ class Polynomial:
         result_coefficients_list = []
 
         for poly_pos in range(max(len(self.poly_coefficients_list) , len(subtracting_polynomial.poly_coefficients_list))):
-            a = self.poly_coefficients_list[poly_pos] if len(self.poly_coefficients_list) > poly_pos else 0
+            a = self.poly_coefficients_list[poly_pos] if len(self.poly_coefficients_list) > poly_pos else wrap_float(0)
             b = subtracting_polynomial.poly_coefficients_list[poly_pos] if len(subtracting_polynomial.poly_coefficients_list) > poly_pos else 0
             result_coefficients_list += [a - b]
-        while len(result_coefficients_list) > 1 and result_coefficients_list[-1] == 0:
+        while len(result_coefficients_list) > 1 and isclose(result_coefficients_list[-1], 0):
             del result_coefficients_list[-1]
         return Polynomial(result_coefficients_list)
 
@@ -208,7 +234,8 @@ class Polynomial:
         Returns: float value of polynomial with coefficients [poly_coefficients] at x value
         """
 
-        result = 0.0
+        x = wrap_float(x)
+        result = wrap_float(0.0)
 
         for i in range(len(self.poly_coefficients_list)):
             result += self.poly_coefficients_list[i] * (x ** i)
@@ -292,20 +319,27 @@ class Polynomial:
         :return:
         """
 
-        current_guess = starting_x
+        epsilon = wrap_float(epsilon)
+        current_guess = wrap_float(starting_x)
         current_value = self.evaluate(current_guess)
         step_number = 0
-        while abs(current_value) > epsilon:
+        while not isclose(current_value,0,abs_tol=epsilon):
             step_number += 1
             if step_number > max_steps:
                 break
+            previous_guess=current_guess
+            previous_value=current_value
+
             new_guess_poly = self.get_tangent_line(current_guess)
             if new_guess_poly.poly_roots is None:
                 return CalculatedRoot(current_guess , current_value , step_number , starting_x , root_was_found = False)
             new_guess = new_guess_poly.poly_roots[0]  # new_guess = x_intercept of tangent line
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
-        if abs(current_value) < epsilon:
+            if self.get_degree()==1 and step_number==5:
+                 print("Updating guess for {} time: changed {:e} :: {}({:.5e})={:.5e} notclose[{:e}] used {}({:.5e}) to get to new_guess={:.5e}/new_value={:.5e}"
+                       .format(step_number, current_guess-previous_guess, self, previous_guess, previous_value, epsilon, new_guess_poly.poly_printer(coeff_format="{}"), previous_guess, current_guess, current_value))
+        if isclose(current_value, 0, abs_tol=epsilon):
             return CalculatedRoot(current_guess , current_value , step_number , starting_x)
         else:
             return CalculatedRoot(current_guess , current_value , step_number , starting_x , root_was_found = False)
@@ -409,7 +443,9 @@ class Polynomial:
                 failed_roots += [newton_result]
                 loops += 1
             if loops >= max_steps_before_quitting != 0:
-                print("Could not find factorable root within {:.1e} after trying {} times. {:s}".format(epsilon , loops , factored_poly.poly_printer()))
+                print("{}Could not find factorable root within {:.1e} after trying {} times. {}".format(
+                     "LINEAR!!" if factored_poly.get_degree()==1 else "",
+                     epsilon , loops , factored_poly.poly_printer(coeff_format="{}")))
                 break
         if sort_roots:
             poly_roots.sort()
@@ -615,7 +651,7 @@ def static_accuracy_successful_steps_chart(num_observations , poly_degrees , eps
 poly_degrees = [5 , 6 , 7 , 8 , 9 , 10]
 epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-16]
 data_frame_test = static_accuracy_successful_steps_chart(30 , poly_degrees , epsilons)
-data_frame_test.to_excel(r'/temp/Math-IA/static_accuracy_successful_steps_chart2.xlsx', index = True, header=True)
+data_frame_test.to_excel(r'/tmp/Math-IA/static_accuracy_successful_steps_chart2.xlsx', index = True, header=True)
 print(data_frame_test)
 
 
