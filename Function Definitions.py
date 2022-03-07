@@ -1,6 +1,7 @@
 # imports
 from barcode import *
 import random
+import pandas
 
 # import matplotlib.pyplot as plt
 # from tabulate import tabulate
@@ -523,6 +524,13 @@ def root_rounder(unrounded_poly_roots):
                                                             root.steps_taken , root.starting_guess , root.root_was_found) , unrounded_poly_roots)
     return rounded_poly_roots
 
+
+def get_data(num_observations):
+    successes = 0
+    failures = 0
+    return successes , failures
+
+
 def root_reorderer(unordered_poly_roots , remove_repeats = False , *parallel_sorting_lists):
     """
     Orders the roots of a list from most negative to most positive (smallest to largest).
@@ -724,8 +732,6 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
     """
 
     assert (maximum > minimum)
-
-    increment = (maximum - minimum) / window_width
 
     global poly_barcode
     poly_barcode = BarCode("{:s} | Roots @x = {:s}".format(polynomial.poly_printer() , ",".join(["{:.3f}".format(r) for r in sorted(polynomial.poly_roots)]))
