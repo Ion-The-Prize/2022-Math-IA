@@ -2,9 +2,8 @@
 from barcode import *
 import random
 import pandas
-
-# import matplotlib.pyplot as plt
-# from tabulate import tabulate
+import matplotlib.pyplot as plt
+import numpy as np
 
 # constants
 BUILD_BINOMIAL_RANGE = 10
@@ -283,9 +282,8 @@ class Polynomial:
 
     def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8):
         """
+        Performs Newton's method for finding roots at a given x-value
 
-
-        :param poly_coefficient_list:
         :param starting_x:
         :param max_steps:
         :param epsilon:
@@ -529,6 +527,34 @@ def root_rounder(unrounded_poly_roots):
     return rounded_poly_roots
 
 
+def graph(polynomial , x_min = -15 , x_max = 15 , x_resolution = 300):
+    plt.style.use('_mpl-gallery')
+
+    # make data
+    x_array = np.linspace(x_min , x_max , x_resolution)
+    y_array = np.empty(shape = (len(x_array) , 1) , dtype = float)
+    for i in range(len(x_array)):
+        y_array[i] = polynomial.evaluate(x_array[i])
+
+    # plot
+    fig , ax = plt.subplots()
+
+    ax.plot(x_array , y_array , linewidth = 2.0)
+
+    ax.set(xlim = (x_min , x_max) , xticks = np.arange(x_min , x_max) ,
+           ylim = (-100 , 100) , yticks = np.arange(-100 , 100 , 10))
+
+    ax.yaxis.grid(False)
+    ax.xaxis.grid(False)
+    ax.yaxis(True)
+
+    plt.show()
+
+
+#graph(poly_maker(5))
+#input("Press Enter to continue...")
+
+
 def get_data(num_observations):
     successes = 0
     failures = 0
@@ -668,6 +694,7 @@ print("Zeros at x = ", question_poly[1])
 # print(poly_printer(poly_power(10, pascal = 0)))
 poly_barcode = None
 
+
 def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
     """
 
@@ -690,21 +717,29 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
                            , minimum , maximum , window_width , 200 , polynomial.poly_degree + 1)
     poly_barcode.close_on_click()
 
+    for i in range(len(polynomial.poly_roots)):
+        poly_barcode.assign_color_number_to_item(polynomial.poly_roots[i] , i)
+
     i = 0
     for x in poly_barcode.get_x_range():
         i += 1
         if i % 100 == 0:
             poly_barcode.draw()
-        root = polynomial.get_newton_root_from_point(starting_x = x , max_steps = 4096 , epsilon = epsilon)
+        root = polynomial.get_newton_root_from_point(starting_x = x , max_steps = 128 , epsilon = epsilon)
         print("Newton Result: ", root)
         if root.root_was_found:
             # Looking for what color the root bar should be
+            closest_exact_root = None
+            closest_epsilon = None
             for r in range(len(polynomial.poly_roots)):
-                if abs(root.x_value - polynomial.poly_roots[r]) < epsilon:
-                    poly_barcode.add_bar(x = x , color_num = r , y = None)
-                    break
+                current_epsilon = abs(root.x_value - polynomial.poly_roots[r])
+                if closest_exact_root is None or closest_epsilon > current_epsilon:
+                    closest_exact_root = polynomial.poly_roots[r]
+                    closest_epsilon = current_epsilon
+            # print("Closest Epsilon: {:.2e} | Closest Root: {:.2f}".format(closest_epsilon , closest_exact_root))
+            poly_barcode.add_bar(x = x , color_item = closest_exact_root , y = root.steps_taken)
         else:
-            poly_barcode.add_bar(x = x , color = GREY , y = None)
+            poly_barcode.add_bar(x = x , color = WHITE , y = root.steps_taken)
     for r in range(len(polynomial.poly_roots)):
         poly_barcode.add_bar(x = polynomial.poly_roots[r] , color = WHITE , y = None)
     poly_barcode.draw()
@@ -716,7 +751,7 @@ BarcodePoly(new_poly , -15 , 15 , 1100)
 poly_barcode.await_click()
 
 
-def charter(poly_coefficient_list , poly_roots , steps_needed , starting_guesses , failed_roots = [] , epsilon = None , print_poly = False , print_poly_degree = False):
+def charter(poly_coefficient_list , poly_roots , steps_needed , starting_guesses , failed_roots = None , epsilon = None , print_poly = False , print_poly_degree = False):
     """
     Puts a given polynomial and some information about that polynomial in handy chart form 
     
@@ -738,6 +773,9 @@ def charter(poly_coefficient_list , poly_roots , steps_needed , starting_guesses
     :type print_poly_degree: bool
     :return: None; prints output
     """
+
+    if failed_roots is None:
+        failed_roots = []
 
     # assign data
     mydata = [{"Nikhil" , "Delhi"} ,

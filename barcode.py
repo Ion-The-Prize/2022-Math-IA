@@ -152,6 +152,7 @@ class BarCode:
                 if ( self.y_range == 0 ):
                     # Avoid division-by-zero errors later
                     self.y_range = 1
+                self.draw()
 
     def draw(self):
         if not self.window_is_open():
