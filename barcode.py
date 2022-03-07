@@ -1,5 +1,6 @@
 from graphics import *
 import random
+import numpy as np
 
 def get_rand_color():
    r=random.randrange(25,256)
@@ -186,4 +187,4 @@ class BarCode:
         self.close_on_click = True
         
     def get_x_range(self):
-        return range(self.x_min, self.x_max, 1.0/self.pix_per_x)
+        return np.arange(self.x_min, self.x_max, 1.0/self.pix_per_x)
