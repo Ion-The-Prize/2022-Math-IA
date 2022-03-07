@@ -1,13 +1,8 @@
+import graphics
 from graphics import *
 import random
 import numpy as np
-
-def get_rand_color():
-   r=random.randrange(25,256)
-   b=random.randrange(25,256)
-   g=random.randrange(25,256)
-   color=color_rgb(r,b,g)
-   return color
+import webcolors
 
 WHITE=color_rgb(255,255,255)
 GREY=color_rgb(100,100,100)
@@ -36,16 +31,18 @@ class Bar:
         if ( self.y == None ):
             y_top = 0
         else:
-            y_top=1.0*self.barcode.win_height*(self.y-self.barcode.y_min)/self.barcode.y_range;
+            y_top= 1.0 * self.barcode.graph_height * (self.y - self.barcode.y_min) / self.barcode.y_range;
 
-        line = Line(Point(self.x_pix, y_top), Point(self.x_pix, self.barcode.win_height))
+        line = Line(Point(self.x_pix, y_top), Point(self.x_pix, self.barcode.graph_height))
         line.setFill(self.color)
         line.draw(self.barcode.win)
 
 
 
 class BarCode:
-    colors = []
+    # Colors always come from this web palette
+    colors = list(webcolors.CSS21_NAMES_TO_HEX)
+    item2color = dict()
 
     title = None
     x_min = None  # type: float
@@ -60,7 +57,7 @@ class BarCode:
     y_range = None  # type: float
 
     win_width = None  # type: int
-    win_height = None  # type: int
+    graph_height = None  # type: int
     pix_per_x = None  # type: int
     win = None  # type: GraphWin
 
@@ -79,6 +76,8 @@ class BarCode:
      :param _height: How tall the barcode should be
      :param num_colors: How many random colors will be requested. This can be 0
       """
+      assert num_colors<len(self.colors)
+
       self.title = title
       self.x_min = _min_x
       self.x_max = _max_x
@@ -99,30 +98,36 @@ class BarCode:
           self.x_tick_marks.append(x_tick_first + i*x_tick_inc)
 
       self.win_width = _width
-      self.win_height = _height
-      self.win = GraphWin(str(title), self.win_width, self.win_height)
+      self.graph_height = _height
+      self.win = GraphWin(str(title), self.win_width, self.graph_height+100)
 
       self.x_range = float(self.x_max-self.x_min)
       self.pix_per_x = float(self.win_width / self.x_range)
 
-      for i in range(num_colors):
-        self.colors.append(get_rand_color())
+    def assign_color_number_to_item(self, item, color_number):
+        self.item2color[item] = self.colors[color_number]
 
-    def add_bar(self, x, color_num = None, color = None, y = None):
+
+    def add_bar(self, x, color_num = None, color = None, color_item = None, y = None):
         """
         Draw a 'bar' (vertical line) on graph
         :param x: X value (must be between x_min and x_max)
         :param y: Y value (optional). Default is to draw line entire height of barcode.
         :param color_num: What randomly generated color to use.
+        :param color_item: An "item" that was assigned a color via assign_color_number_to_item
         :param color: Color to draw
         :return:
         """
-        assert(color_num is not None or color is not None)
+        assert(color_num is not None or color is not None or color_item is not None)
         assert(color_num is None or color_num<len(self.colors))
+        assert(color_item is None or self.item2color[color_item] is not None)
         assert(self.x_min<=x<=self.x_max)
 
         if (color_num):
             color=self.colors[color_num]
+
+        if ( color_item ):
+            color=self.item2color[color_item]
 
         b=Bar(self, x, color, y)
 
@@ -150,7 +155,7 @@ class BarCode:
             return
 
         self.win.autoflush=False
-        rect = Rectangle(Point(0, 0), Point(self.win_width, self.win_height))
+        rect = Rectangle(Point(0, 0), Point(self.win_width, self.graph_height))
         rect.setFill('black');
         rect.draw(self.win)
 
@@ -161,12 +166,34 @@ class BarCode:
 
         for tick_x in self.x_tick_marks:
             x_pix = (tick_x - self.x_min) * self.pix_per_x
-            line = Line(Point(x_pix, int(self.win_height*0.75)), Point(x_pix, self.win_height))
+            line = Line(Point(x_pix, int(self.graph_height * 0.75)), Point(x_pix, self.graph_height))
             line.setFill(YELLOW)
             line.draw(self.win)
-            label = Text(Point(x_pix-5, self.win_height-20), "{:.1f}".format(tick_x))
+            label = Text(Point(x_pix - 5, self.graph_height - 20), "{:.1f}".format(tick_x))
             label.setFill(RED);
             label.draw(self.win)
+
+        swatch_size=20
+        if len(self.item2color) == 0:
+            for i in range(len(self.colors)):
+                box = Rectangle(Point(i*swatch_size,self.graph_height), Point((i+1)*swatch_size-1, self.graph_height+swatch_size))
+                box.setFill(self.colors[i])
+                box.draw(self.win)
+        else:
+            i=0
+            for item,color in self.item2color.items():
+                if type(item) == int or type(item) == float:
+                    x_pix = (item - self.x_min) * self.pix_per_x
+
+                    box = Rectangle(Point(x_pix-swatch_size/2, self.graph_height), Point(x_pix+swatch_size/2, self.graph_height + swatch_size))
+                    box.setFill(color)
+                    box.draw(self.win)
+                else:
+                    box = Rectangle(Point(i * swatch_size, self.graph_height),
+                                    Point((i + 1) * swatch_size - 1, self.graph_height + swatch_size))
+                    box.setFill(self.colors[i])
+                    box.draw(self.win)
+                i += 1
 
         self.win.flush()
 
