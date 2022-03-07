@@ -397,11 +397,11 @@ class Polynomial:
             if newton_result.root_was_found:
                 factor = make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
                 factored_poly , factor_remainder = factored_poly.divide(factor)  # remainder's only returned; never used
-                print("Factor         " , factor.poly_coefficients_list)
-                print("Remaining Poly:" , factored_poly.poly_coefficients_list)
-                print("Remainder:     " , factor_remainder.poly_coefficients_list)
-                poly_roots += [newton_result]
-                remainders.append(factor_remainder)
+                # print("Factor         " , factor.poly_printer())
+                # print("Remaining Poly:" , factored_poly.poly_printer())
+                # print("Remainder:     " , factor_remainder.poly_printer())
+                poly_roots.append(newton_result)
+                remainders.append(factor_remainder)  # store remainder
                 loops = 0
             else:
                 failed_roots += [newton_result]
@@ -412,7 +412,6 @@ class Polynomial:
         if sort_roots:
             poly_roots.sort()
         return poly_roots , failed_roots ,remainders
-
 
     def poly_power(self , power , pascal = 0):
         """
@@ -618,7 +617,7 @@ print("Subract Test: " , subtract_test_poly_a.subtract(subtract_test_poly_b).pol
 
 divide_test_poly_a = Polynomial([1 , 2 , 1])
 divide_test_poly_b = Polynomial([1 , 1])
-quotient , remainder = divide_test_poly_a.divide(divide_test_poly_b)
+quotient , remainder = first_mult_test_wolfram.divide(first_mult_test_poly_b)
 print("Division Test: " , quotient.poly_coefficients_list)
 
 
@@ -746,7 +745,7 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
     print("Done drawing")
 
 
-# input("Press Enter to continue...")
+input("Press Enter to continue...")
 BarcodePoly(new_poly , -15 , 15 , 1100)
 poly_barcode.await_click()
 
