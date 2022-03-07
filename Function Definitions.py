@@ -1,11 +1,11 @@
 # imports
+from barcode import *
 import random
+
 # import matplotlib.pyplot as plt
 # from tabulate import tabulate
 
 # constants
-import barcode
-
 BUILD_BINOMIAL_RANGE = 10
 
 
@@ -685,7 +685,7 @@ print("Zeros at x = ", question_poly[1])
 
 
 # print(poly_printer(poly_power(10, pascal = 0)))
-
+poly_barcode = None
 
 def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
     """
@@ -706,7 +706,9 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
 
     increment = (maximum - minimum) / window_width
 
-    barcode.init(minimum , maximum , window_width , 200 , polynomial.poly_degree + 1)
+    global poly_barcode
+    poly_barcode = BarCode(polynomial.poly_printer() , minimum , maximum , window_width , 200 , polynomial.poly_degree + 1)
+    poly_barcode.close_on_click()
 
     for i in range(window_width):
         x = minimum + (i * increment)
@@ -714,19 +716,14 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
         if root:
             for r in range(len(polynomial.poly_roots)):
                 if abs(root.x_value - polynomial.poly_roots[r]) < epsilon:
-                    barcode.add_bar(x , color_num = r , y = 10 * root.steps_taken)
+                    poly_barcode.add_bar(x = x , color_num = r , y = 10 * root.steps_taken)
                     break
     for r in range(len(polynomial.poly_roots)):
-        barcode.add_bar(x = polynomial.poly_roots[r] , color_num = polynomial.poly_degree , y = 10)
+        poly_barcode.add_bar(x = polynomial.poly_roots[r] , color = WHITE , y = 10)
+    poly_barcode.draw()
 
-
-input("Press Enter to continue...")
 BarcodePoly(new_poly , -15 , 15 , 1100)
-while True:
-    barcode.draw()
-    input("Press Enter to continue...")
-    break
-
+poly_barcode.await_click()
 
 # noinspection PyUnreachableCode
 def charter(poly_coefficient_list , poly_roots , steps_needed , starting_guesses , failed_roots = [] , epsilon = None , print_poly = False , print_poly_degree = False):
