@@ -163,7 +163,7 @@ class BarCode:
 
         self.win.autoflush=False
         rect = Rectangle(Point(0, 0), Point(self.win_width, self.graph_height))
-        rect.setFill('black');
+        rect.setFill('black')
         rect.draw(self.win)
 
         for x_pix in range(self.win_width):
@@ -178,7 +178,7 @@ class BarCode:
             line.draw(self.win)
             label = Text(Point(x_pix - 5, self.graph_height - 20), "{:.1f}".format(tick_x))
             label.setSize(18)
-            label.setFill('white');
+            label.setFill('white')
             label.draw(self.win)
 
         swatch_width=5
@@ -189,17 +189,24 @@ class BarCode:
                 box.setFill(self.colors[i])
                 box.draw(self.win)
         else:
+            # Color items are assigned, so try to line them up with X values
+            # Because the can overlap, we adjust height of swatches
+            swatch_vertical_step = swatch_height / 4
+            swatch_vertical_start = self.graph_height - swatch_vertical_step
             i=0
             for item,color in self.item2color.items():
+                swatch_vertical_start += swatch_vertical_step
+                # Check to see if item is actually a number
                 if type(item) == int or type(item) == float:
                     x_pix = (item - self.x_min) * self.pix_per_x
 
-                    box = Rectangle(Point(x_pix-swatch_width/2, self.graph_height), Point(x_pix+swatch_width/2, self.graph_height + swatch_height))
+                    box = Rectangle(Point(x_pix-swatch_width/2, swatch_vertical_start), Point(x_pix+swatch_width/2, self.graph_height + swatch_height))
                     box.setFill(color)
                     box.draw(self.win)
                 else:
-                    box = Rectangle(Point(i * swatch_width, self.graph_height),
-                                    Point((i + 1) * swatch_width - 1, self.graph_height + swatch_height))
+                    # If the swatch item is not a number, then line swatch up along bottom
+                    box = Rectangle(Point(i * swatch_width, self.graph_height+2*swatch_height),
+                                    Point((i + 1) * swatch_width - 1, self.graph_height + 3*swatch_height))
                     box.setFill(self.colors[i])
                     box.draw(self.win)
                 i += 1
