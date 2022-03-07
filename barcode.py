@@ -161,7 +161,7 @@ class BarCode:
 
         for tick_x in self.x_tick_marks:
             x_pix = (tick_x - self.x_min) * self.pix_per_x
-            line = Line(Point(x_pix, 0), Point(x_pix, self.win_height))
+            line = Line(Point(x_pix, int(self.win_height*0.75)), Point(x_pix, self.win_height))
             line.setFill(YELLOW)
             line.draw(self.win)
             label = Text(Point(x_pix-5, self.win_height-20), "{:.1f}".format(tick_x))
