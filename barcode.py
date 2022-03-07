@@ -10,117 +10,118 @@ def get_rand_color():
 
 WHITE=color_rgb(255,255,255)
 
-colors=[]
-
-x_min=None # type: float
-x_max=None # type: float
-x_range=None # type: float
-
-y_min=None # type: float
-y_max=None # type: float
-y_range=None # type: float
-
-win_width=None  # type: int
-win_height=None # type: int
-pix_per_x=None #type: int
-win=None #type: GraphWin
-
-# Bars so far
-bars={}
-
 class Bar:
     """A bar on the barcode"""
+    barcode=None
     x=None
     x_pix = None
     y=None
     color=None
 
-    def __init__(self, x, color, y=None, ):
+    def __init__(self, barcode, x, color, y=None, ):
+        self.barcode=barcode
         self.x=x
-        self.x_pix = int((x-x_min) * pix_per_x)
+        self.x_pix = int((x-barcode.x_min) * barcode.pix_per_x)
 
         self.y=y
         self.color=color
 
-        bars[self.x_pix] = self
+        barcode.bars[self.x_pix] = self
 
     def draw(self):
         if ( self.y == None ):
             y_top = 0
         else:
-            y_top=1.0*win_height*(self.y-y_min)/y_range;
+            y_top=1.0*self.barcode.win_height*(self.y-self.barcode.y_min)/self.barcode.y_range;
 
-        line = Line(Point(self.x_pix, y_top), Point(self.x_pix, win_height))
+        line = Line(Point(self.x_pix, y_top), Point(self.x_pix, self.barcode.win_height))
         line.setFill(self.color)
-        line.draw(win)
+        line.draw(self.barcode.win)
 
 
-def init(_min_x, _max_x, _width=800, _height=300, num_colors=0):
-  """
-  Initialize the barcode library
+class BarCode:
+    colors = []
 
- :param _min_x: The value of x for the left edge of the barcode
- :param _max_x: The value of x for the right edge of the barcode
- :param _width: How wide the barcode should be
- :param _height: How tall the barcode should be
- :param num_colors: How many random colors will be requested. This can be 0
-  """
-  global x_min, x_max, win_width, win_height, x_range, pix_per_x, win
-  x_min = _min_x
-  x_max = _max_x
-  win_width = _width
-  win_height = _height
-  win = GraphWin("Barcode", win_width, win_height)
+    x_min = None  # type: float
+    x_max = None  # type: float
+    x_range = None  # type: float
 
-  x_range = 1.0*x_max-x_min
-  pix_per_x = 1.0 * win_width / x_range
+    y_min = None  # type: float
+    y_max = None  # type: float
+    y_range = None  # type: float
 
-  global colors
-  for i in range(num_colors):
-    colors.append(get_rand_color())
+    win_width = None  # type: int
+    win_height = None  # type: int
+    pix_per_x = None  # type: int
+    win = None  # type: GraphWin
 
-def add_bar(x, color_num = None, color = None, y = None):
-    """
-    Draw a 'bar' (vertical line) on graph
-    :param x: X value (must be between x_min and x_max)
-    :param y: Y value (optional). Default is to draw line entire height of barcode.
-    :param color_num: What randomly generated color to use.
-    :param color: Color to draw
-    :return:
-    """
-    assert(color_num != None or color != None)
-    assert(color_num == None or color_num<len(colors))
-    assert(x_min<=x<=x_max)
+    # Bars so far
+    bars = {}
 
-    if (color_num):
-        color=colors[color_num]
 
-    b=Bar(x,color, y)
+    def __init__(self, _min_x, _max_x, _width=800, _height=300, num_colors=0):
+      """
+      Initialize the barcode library
 
-    # Figure out implications of a Y value... do we need to rescale?
-    global y_min, y_max, y_range
-    recalculate=False
-    if ( y != None ):
-        if ( y_min == None or y < y_min ):
-            y_min = y
-            recalculate = True
-        if ( y_max == None or y > y_max ):
-            y_max = y
-            recalculate = True
-        if ( recalculate ):
-            y_range = y_max - y_min
-            if ( y_range == 0 ):
-                # Avoid division-by-zero errors later
-                y_range = 1
+     :param _min_x: The value of x for the left edge of the barcode
+     :param _max_x: The value of x for the right edge of the barcode
+     :param _width: How wide the barcode should be
+     :param _height: How tall the barcode should be
+     :param num_colors: How many random colors will be requested. This can be 0
+      """
+      self.x_min = _min_x
+      self.x_max = _max_x
+      self.win_width = _width
+      self.win_height = _height
+      self.win = GraphWin("Barcode", self.win_width, self.win_height)
 
-def draw():
-    win.autoflush=False
-    rect = Rectangle(Point(0, 0), Point(win_width, win_height))
-    rect.setFill('black');
-    rect.draw(win)
+      self.x_range = float(self.x_max-self.x_min)
+      self.pix_per_x = float(self.win_width / self.x_range)
 
-    for x_pix in range(win_width):
-        bar=bars.get(x_pix)
-        if ( bar != None ):
-            bar.draw()
-    win.flush()
+      for i in range(num_colors):
+        self.colors.append(get_rand_color())
+
+    def add_bar(self, x, color_num = None, color = None, y = None):
+        """
+        Draw a 'bar' (vertical line) on graph
+        :param x: X value (must be between x_min and x_max)
+        :param y: Y value (optional). Default is to draw line entire height of barcode.
+        :param color_num: What randomly generated color to use.
+        :param color: Color to draw
+        :return:
+        """
+        assert(color_num != None or color != None)
+        assert(color_num == None or color_num<len(self.colors))
+        assert(self.x_min<=x<=self.x_max)
+
+        if (color_num):
+            color=self.colors[color_num]
+
+        b=Bar(self, x, color, y)
+
+        # Figure out implications of a Y value... do we need to rescale?
+        recalculate=False
+        if ( y != None ):
+            if ( self.y_min == None or y < self.y_min ):
+                self.y_min = y
+                recalculate = True
+            if ( self.y_max == None or y > self.y_max ):
+                self.y_max = y
+                recalculate = True
+            if ( recalculate ):
+                self.y_range = self.y_max - self.y_min
+                if ( self.y_range == 0 ):
+                    # Avoid division-by-zero errors later
+                    self.y_range = 1
+
+    def draw(self):
+        self.win.autoflush=False
+        rect = Rectangle(Point(0, 0), Point(self.win_width, self.win_height))
+        rect.setFill('black');
+        rect.draw(self.win)
+
+        for x_pix in range(self.win_width):
+            bar=self.bars.get(x_pix)
+            if ( bar != None ):
+                bar.draw()
+        self.win.flush()

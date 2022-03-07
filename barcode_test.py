@@ -1,6 +1,6 @@
 import barcode, random
 
-barcode.init(-10, 15, 800, 200, 10)
+barcode=barcode.BarCode(-10, 15, 800, 200, 10)
 
 i=0
 while True:
