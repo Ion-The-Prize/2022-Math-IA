@@ -9,6 +9,7 @@ def get_rand_color():
    return color
 
 WHITE=color_rgb(255,255,255)
+GREY=color_rgb(100,100,100)
 
 class Bar:
     """A bar on the barcode"""

@@ -504,6 +504,70 @@ def poly_maker(degree , rand_binomial_lower = -BUILD_BINOMIAL_RANGE , rand_binom
     return result_poly
 
 
+def root_rounder(unrounded_poly_roots):
+    """
+    Rounds a lot of roots
+
+    :type unrounded_poly_roots: list[CalculatedRoot]
+    :return:
+    """
+
+    rounded_poly_roots = map(lambda root : CalculatedRoot(float("{:.3f}".format(root.x_value)) , root.y_value ,
+                                                            root.steps_taken , root.starting_guess , root.root_was_found) , unrounded_poly_roots)
+    return rounded_poly_roots
+
+def root_reorderer(unordered_poly_roots , remove_repeats = False , *parallel_sorting_lists):
+    """
+    Orders the roots of a list from most negative to most positive (smallest to largest).
+
+    :param unordered_poly_roots: the list of roots that will be sorted
+    :type unordered_poly_roots: list[CalculatedRoot]
+    :param remove_repeats: whether repeated roots will be removed (whether [1 , 0 , 0] will be turned into [0 , 1]) (default False)
+    :type remove_repeats: bool
+    :param parallel_sorting_lists: lists that will be rearranged the same way unordered_poly_roots is, in case values need to line up (so lists [6 , 4 , 5] and [0 , 1 , 2] turn into [4 , 5 , 6] and [1 , 2 , 0])
+    :return: list[float] reordered list of roots and all the newly sorted *parallel_sorting_lists, if any, in the order they were input
+    """
+    reordered_roots = []
+    """
+    if remove_repeats:
+        for i in range(len(unordered_poly_roots) - 1):
+            root = unordered_poly_roots[i]
+            for j in range(i + 1, len(unordered_poly_roots)):
+                # error begone
+        for i in range(unordered_poly_roots.count(poly_roots[0])):
+            unordered_poly_roots.remove(poly_roots[0])
+
+    reordered_roots = [0.0]
+    reordered_roots[0] = unordered_poly_roots[0]
+    subordinate_lists = []
+    for i in range(len(parallel_sorting_lists)):
+        subordinate_lists[i] = []
+        subordinate_lists[i][0] = parallel_sorting_lists[i][0]
+
+    del unordered_poly_roots[0]
+
+    while len(unordered_poly_roots) > 0:
+        new_position = 0
+        item = unordered_poly_roots[0]
+        while new_position < len(reordered_roots) and item > reordered_roots[new_position]:
+            new_position += 1
+        if new_position == len(reordered_roots):
+            reordered_roots.append(item)
+        else:
+            reordered_roots.insert(new_position , item)
+
+        if remove_repeats:
+            for i in range(unordered_poly_roots.count(item)):
+                unordered_poly_roots.remove(item)
+        else:
+            del unordered_poly_roots[0]
+    """
+    return reordered_roots
+
+
+# print(root_reorderer([6 , 4 , 8 , 8 , 5 , 7 , 9 , 10] , False))
+
+
 """
 my_list = [0]
 adding_list = [1 , 1]
@@ -609,58 +673,6 @@ class NotPoly:
         super().__init__(self.message)
 
 
-def root_reorderer(unordered_poly_roots , remove_repeats = False , *parallel_sorting_lists):
-    """
-    Orders the roots of a list from most negative to most positive (smallest to largest).
-
-    :param unordered_poly_roots: the list of roots that will be sorted
-    :type unordered_poly_roots: list[float]
-    :param remove_repeats: whether repeated roots will be removed (whether [1 , 0 , 0] will be turned into [0 , 1]) (default False)
-    :type remove_repeats: bool
-    :param parallel_sorting_lists: lists that will be rearranged the same way unordered_poly_roots is, in case values need to line up (so lists [6 , 4 , 5] and [0 , 1 , 2] turn into [4 , 5 , 6] and [1 , 2 , 0])
-    :return: list[float] reordered list of roots and all the newly sorted *parallel_sorting_lists, if any, in the order they were input
-    """
-    reordered_roots = []
-    """
-    if remove_repeats:
-        for i in range(len(unordered_poly_roots) - 1):
-            root = unordered_poly_roots[i]
-            for j in range(i + 1, len(unordered_poly_roots)):
-                # error begone
-        for i in range(unordered_poly_roots.count(poly_roots[0])):
-            unordered_poly_roots.remove(poly_roots[0])
-
-    reordered_roots = [0.0]
-    reordered_roots[0] = unordered_poly_roots[0]
-    subordinate_lists = []
-    for i in range(len(parallel_sorting_lists)):
-        subordinate_lists[i] = []
-        subordinate_lists[i][0] = parallel_sorting_lists[i][0]
-
-    del unordered_poly_roots[0]
-
-    while len(unordered_poly_roots) > 0:
-        new_position = 0
-        item = unordered_poly_roots[0]
-        while new_position < len(reordered_roots) and item > reordered_roots[new_position]:
-            new_position += 1
-        if new_position == len(reordered_roots):
-            reordered_roots.append(item)
-        else:
-            reordered_roots.insert(new_position , item)
-
-        if remove_repeats:
-            for i in range(unordered_poly_roots.count(item)):
-                unordered_poly_roots.remove(item)
-        else:
-            del unordered_poly_roots[0]
-    """
-    return reordered_roots
-
-
-print(root_reorderer([6 , 4 , 8 , 8 , 5 , 7 , 9 , 10] , False))
-
-
 # print("RAND TEST: ", random.random() * 10 ** 2)
 for i in range(10):
     print()
@@ -674,6 +686,7 @@ print("Poly Coeff: ", new_poly.poly_coefficients_list)
 print("Real Roots: ", new_poly.poly_roots)
 calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_steps_before_quitting = 1 , epsilon = 1e-9)
 print("Calc Roots: ", [root.x_value for root in calc_roots])
+print("Round Root: ", [root.x_value for root in root_rounder(calc_roots)])
 print("Root Steps: ", [root.steps_taken for root in calc_roots])
 print("Fail Roots: ", ', '.join(str(r) for r in fail_roots))
 
@@ -713,11 +726,15 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
     for i in range(window_width):
         x = minimum + (i * increment)
         root = polynomial.get_newton_root_from_point(starting_x = x , max_steps = 4096 , epsilon = epsilon)
-        if root:
+        print("Newton Result: ", root)
+        if root.root_was_found:
+            # Looking for what color the root bar should be
             for r in range(len(polynomial.poly_roots)):
                 if abs(root.x_value - polynomial.poly_roots[r]) < epsilon:
                     poly_barcode.add_bar(x = x , color_num = r , y = 10 * root.steps_taken)
                     break
+        else:
+            poly_barcode.add_bar(x = x , color = GREY , y = 5)
     for r in range(len(polynomial.poly_roots)):
         poly_barcode.add_bar(x = polynomial.poly_roots[r] , color = WHITE , y = 10)
     poly_barcode.draw()
