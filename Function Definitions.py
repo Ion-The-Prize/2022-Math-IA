@@ -331,7 +331,7 @@ class Polynomial:
         :param factor_roots: INCOMPATIBLE WITH EVENLY SPACED STARTING GUESSES... whether found roots will be factored out,
             results in a list of the actual roots (will only factor out roots with y values below epsilon and will try again until all roots are found)
         :type factor_roots: bool
-        :param sort_roots: whether the final roots string will be sorted from most negative to most positive (and repeats removed) (default False)
+        :param sort_roots: whether the final roots string will be sorted from most negative to most positive (default False)
         :type sort_roots: bool
         :return: tuple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)]]
         """
@@ -358,6 +358,8 @@ class Polynomial:
                 poly_roots += [newton_result]
             else:
                 failed_roots += [newton_result]
+        if sort_roots:
+            poly_roots.sort()
         return poly_roots , failed_roots
 
     def get_roots_with_dividing(self , max_steps_per_root = 20 , max_steps_before_quitting = None, epsilon = 1e-10 , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
@@ -378,7 +380,7 @@ class Polynomial:
         :type guess_range_min: float
         :param guess_range_max: interval of guessing ("root range") maximum
         :type guess_range_max: float
-        :param sort_roots: whether the final roots string will be sorted from most negative to most positive (and repeats removed) (default False)
+        :param sort_roots: whether the final roots string will be sorted from most negative to most positive (default False)
         :type sort_roots: bool
         :return: triple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)] , list[Polynomial (remainders)]]
         """
@@ -409,6 +411,8 @@ class Polynomial:
             if loops >= max_steps_before_quitting != 0:
                 print("Could not find factorable root after trying ", loops, " times.")
                 break
+        if sort_roots:
+            poly_roots.sort()
         return poly_roots , failed_roots ,remainders
 
 
@@ -529,58 +533,6 @@ def get_data(num_observations):
     successes = 0
     failures = 0
     return successes , failures
-
-
-def root_reorderer(unordered_poly_roots , remove_repeats = False , *parallel_sorting_lists):
-    """
-    Orders the roots of a list from most negative to most positive (smallest to largest).
-
-    :param unordered_poly_roots: the list of roots that will be sorted
-    :type unordered_poly_roots: list[CalculatedRoot]
-    :param remove_repeats: whether repeated roots will be removed (whether [1 , 0 , 0] will be turned into [0 , 1]) (default False)
-    :type remove_repeats: bool
-    :param parallel_sorting_lists: lists that will be rearranged the same way unordered_poly_roots is, in case values need to line up (so lists [6 , 4 , 5] and [0 , 1 , 2] turn into [4 , 5 , 6] and [1 , 2 , 0])
-    :return: list[float] reordered list of roots and all the newly sorted *parallel_sorting_lists, if any, in the order they were input
-    """
-    reordered_roots = []
-    """
-    if remove_repeats:
-        for i in range(len(unordered_poly_roots) - 1):
-            root = unordered_poly_roots[i]
-            for j in range(i + 1, len(unordered_poly_roots)):
-                # error begone
-        for i in range(unordered_poly_roots.count(poly_roots[0])):
-            unordered_poly_roots.remove(poly_roots[0])
-
-    reordered_roots = [0.0]
-    reordered_roots[0] = unordered_poly_roots[0]
-    subordinate_lists = []
-    for i in range(len(parallel_sorting_lists)):
-        subordinate_lists[i] = []
-        subordinate_lists[i][0] = parallel_sorting_lists[i][0]
-
-    del unordered_poly_roots[0]
-
-    while len(unordered_poly_roots) > 0:
-        new_position = 0
-        item = unordered_poly_roots[0]
-        while new_position < len(reordered_roots) and item > reordered_roots[new_position]:
-            new_position += 1
-        if new_position == len(reordered_roots):
-            reordered_roots.append(item)
-        else:
-            reordered_roots.insert(new_position , item)
-
-        if remove_repeats:
-            for i in range(unordered_poly_roots.count(item)):
-                unordered_poly_roots.remove(item)
-        else:
-            del unordered_poly_roots[0]
-    """
-    return reordered_roots
-
-
-# print(root_reorderer([6 , 4 , 8 , 8 , 5 , 7 , 9 , 10] , False))
 
 
 """
