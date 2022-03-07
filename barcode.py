@@ -181,10 +181,11 @@ class BarCode:
             label.setFill('white');
             label.draw(self.win)
 
-        swatch_size=20
+        swatch_width=5
+        swatch_height=30
         if len(self.item2color) == 0:
             for i in range(len(self.colors)):
-                box = Rectangle(Point(i*swatch_size,self.graph_height), Point((i+1)*swatch_size-1, self.graph_height+swatch_size))
+                box = Rectangle(Point(i*swatch_width,self.graph_height), Point((i+1)*swatch_width-1, self.graph_height+swatch_height))
                 box.setFill(self.colors[i])
                 box.draw(self.win)
         else:
@@ -193,12 +194,12 @@ class BarCode:
                 if type(item) == int or type(item) == float:
                     x_pix = (item - self.x_min) * self.pix_per_x
 
-                    box = Rectangle(Point(x_pix-swatch_size/2, self.graph_height), Point(x_pix+swatch_size/2, self.graph_height + swatch_size))
+                    box = Rectangle(Point(x_pix-swatch_width/2, self.graph_height), Point(x_pix+swatch_width/2, self.graph_height + swatch_height))
                     box.setFill(color)
                     box.draw(self.win)
                 else:
-                    box = Rectangle(Point(i * swatch_size, self.graph_height),
-                                    Point((i + 1) * swatch_size - 1, self.graph_height + swatch_size))
+                    box = Rectangle(Point(i * swatch_width, self.graph_height),
+                                    Point((i + 1) * swatch_width - 1, self.graph_height + swatch_height))
                     box.setFill(self.colors[i])
                     box.draw(self.win)
                 i += 1
