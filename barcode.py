@@ -1,3 +1,5 @@
+import math
+
 import graphics
 from graphics import *
 import random
@@ -33,9 +35,9 @@ class Bar:
 
     def draw(self):
         if ( self.y == None ):
-            y_top = 0
+            y_top=0
         else:
-            y_top= 1.0 * self.barcode.graph_height * (self.y - self.barcode.y_min) / self.barcode.y_range;
+            y_top = self.barcode.get_y_graph_pixel(self.y)
 
         line = Line(Point(self.x_pix, y_top), Point(self.x_pix, self.barcode.graph_height))
         line.setFill(self.color)
@@ -59,6 +61,7 @@ class BarCode:
     y_min = None  # type: float
     y_max = None  # type: float
     y_range = None  # type: float
+    y_tick_marks=[] #type: list[float]
 
     win_width = None  # type: int
     graph_height = None  # type: int
@@ -87,22 +90,7 @@ class BarCode:
       self.x_max = _max_x
       self.num_ticks_x = _num_ticks_x
 
-      x_range = self.x_max - self.x_min
-
-      x_tick_first=None
-      x_tick_inc=None
-      if ( x_range>10 ):
-          #integer mode
-          x_tick_first= round(self.x_min)+1
-          x_tick_inc = round(x_range/10)
-      else:
-          x_tick_first=self.x_min
-          x_tick_inc=x_range/10
-
-      x_tick = x_tick_first
-      while x_tick <= self.x_max:
-          self.x_tick_marks.append(x_tick)
-          x_tick += x_tick_inc
+      self.x_tick_marks = self.get_tick_marks(self.x_min, self.x_max, 10)
 
       self.win_width = _width
       self.graph_height = _height
@@ -110,6 +98,29 @@ class BarCode:
 
       self.x_range = float(self.x_max-self.x_min)
       self.pix_per_x = float(self.win_width / self.x_range)
+
+    def get_tick_marks(self, min, max, num_tick_marks):
+        if ( min is None or max is None ):
+            return []
+
+        range = max - min
+
+        tick_first = None
+        tick_inc = None
+        if (range > num_tick_marks):
+            # integer mode
+            tick_first = math.floor(min) + 1
+            tick_inc = round(range / num_tick_marks)
+        else:
+            tick_first = min
+            tick_inc = range / num_tick_marks
+
+        tick = tick_first
+        result=[]
+        while tick < max:
+            result.append(tick)
+            tick += tick_inc
+        return result
 
     def assign_color_number_to_item(self, item, color_number):
         self.item2color[item] = self.colors[color_number]
@@ -142,16 +153,20 @@ class BarCode:
         recalculate=False
         if ( y != None ):
             if ( self.y_min == None or y < self.y_min ):
+                #print("Found new y_min: {:.2f}".format(y))
                 self.y_min = y
                 recalculate = True
             if ( self.y_max == None or y > self.y_max ):
+                #print("Found new y_max: {:.2f}".format(y))
                 self.y_max = y
                 recalculate = True
             if ( recalculate ):
+                if self.y_min == self.y_max:
+                    self.y_min = self.y_max - 1
                 self.y_range = self.y_max - self.y_min
-                if ( self.y_range == 0 ):
-                    # Avoid division-by-zero errors later
-                    self.y_range = 1
+
+                self.y_tick_marks = self.get_tick_marks(self.y_min, self.y_max, 5)
+
                 self.draw()
 
     def draw(self):
@@ -182,11 +197,27 @@ class BarCode:
             label.setFill('white')
             label.draw(self.win)
 
+        if len(self.y_tick_marks) > 0:
+            for tick_y in self.y_tick_marks:
+                y_pix = self.get_y_graph_pixel(tick_y)
+                line = Line(Point(0, y_pix), Point(25, y_pix))
+                line.setFill(WHITE)
+                line.draw(self.win)
+                label = Text(Point(20, y_pix), "{:.1f}".format(tick_y))
+                label.setSize(18)
+                label.setFill('white')
+                label.draw(self.win)
+
+
+
         swatch_width=5
         swatch_height=30
         if len(self.item2color) == 0:
+            # No items/values assigned to colors... just show colors along bottom
             for i in range(len(self.colors)):
-                box = Rectangle(Point(i*swatch_width,self.graph_height), Point((i+1)*swatch_width-1, self.graph_height+swatch_height))
+                ul = Point(i*swatch_width,self.graph_height)
+                lr = Point(ul.x+swatch_width, ul.y+swatch_height);
+                box = Rectangle(ul, lr)
                 box.setFill(self.colors[i])
                 box.draw(self.win)
         else:
@@ -201,18 +232,30 @@ class BarCode:
                 if type(item) == int or type(item) == float:
                     x_pix = (item - self.x_min) * self.pix_per_x
 
-                    box = Rectangle(Point(x_pix-swatch_width/2, swatch_vertical_start), Point(x_pix+swatch_width/2, self.graph_height + swatch_height))
+                    ul=Point(x_pix-swatch_width/2, swatch_vertical_start)
+                    lr = Point(ul.x + swatch_width, ul.y + swatch_height);
+
+                    box = Rectangle(ul, lr)
                     box.setFill(color)
                     box.draw(self.win)
                 else:
                     # If the swatch item is not a number, then line swatch up along bottom
-                    box = Rectangle(Point(i * swatch_width, self.graph_height+2*swatch_height),
-                                    Point((i + 1) * swatch_width - 1, self.graph_height + 3*swatch_height))
+                    ul=Point(i*swatch_width, self.graph_height+2*swatch_height)
+                    lr = Point(ul.x + swatch_width, ul.y + swatch_height);
+
+                    box = Rectangle(ul, lr)
                     box.setFill(self.colors[i])
                     box.draw(self.win)
                 i += 1
 
         self.win.flush()
+
+    def get_y_graph_pixel(self, y):
+        y_fraction = (y - self.y_min) / self.y_range
+
+        y_pix= self.graph_height * (1-y_fraction)
+        return y_pix
+
 
     def window_is_open(self):
         return not self.win.closed
