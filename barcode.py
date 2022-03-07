@@ -4,10 +4,14 @@ import random
 import numpy as np
 import webcolors
 
+color_palette = list(webcolors.CSS21_NAMES_TO_HEX)
+color_palette.remove('black')
+color_palette.remove('gray')
+color_palette.remove('silver')
+color_palette.remove('white')
+
 WHITE=color_rgb(255,255,255)
 GREY=color_rgb(100,100,100)
-YELLOW=color_rgb(255,255,0)
-RED=color_rgb(255,0,0)
 
 class Bar:
     """A bar on the barcode"""
@@ -41,7 +45,7 @@ class Bar:
 
 class BarCode:
     # Colors always come from this web palette
-    colors = list(webcolors.CSS21_NAMES_TO_HEX)
+    colors = color_palette
     item2color = dict()
 
     title = None
@@ -94,8 +98,11 @@ class BarCode:
       else:
           x_tick_first=self.x_min
           x_tick_inc=x_range/10
-      for i in range(self.num_ticks_x):
-          self.x_tick_marks.append(x_tick_first + i*x_tick_inc)
+
+      x_tick = x_tick_first
+      while x_tick <= self.x_max:
+          self.x_tick_marks.append(x_tick)
+          x_tick += x_tick_inc
 
       self.win_width = _width
       self.graph_height = _height
@@ -167,10 +174,11 @@ class BarCode:
         for tick_x in self.x_tick_marks:
             x_pix = (tick_x - self.x_min) * self.pix_per_x
             line = Line(Point(x_pix, int(self.graph_height * 0.75)), Point(x_pix, self.graph_height))
-            line.setFill(YELLOW)
+            line.setFill(WHITE)
             line.draw(self.win)
             label = Text(Point(x_pix - 5, self.graph_height - 20), "{:.1f}".format(tick_x))
-            label.setFill(RED);
+            label.setSize(18)
+            label.setFill('white');
             label.draw(self.win)
 
         swatch_size=20
