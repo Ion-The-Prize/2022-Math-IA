@@ -39,9 +39,9 @@ class CalculatedRoot:
 
     def __repr__(self):
         if self.root_was_found:
-            return "x={:.3f} | steps={:d} | start={:.3f}".format(self.x_value , self.steps_taken , self.starting_guess)
+            return "x={:.3f} #{:d} @{:.3f}".format(self.x_value , self.steps_taken , self.starting_guess)
         else:
-            return "FAIL: x={:.3f} | y={:.3e} | steps={:d} | start={:.3f}".format(self.x_value , self.y_value , self.steps_taken , self.starting_guess)
+            return "FAIL: x={:.3f}->{:.3e}(#{:d}@{:.3f})".format(self.x_value , self.y_value , self.steps_taken , self.starting_guess)
 
     def was_found(self):
         return self.root_was_found
@@ -63,7 +63,7 @@ class Polynomial:
         :type poly_roots: list
         """
         self.poly_coefficients_list = [wrap_float(c) for c in poly_coefficients_list]
-        if poly_roots:
+        if poly_roots is not None:
             self.poly_roots = [wrap_float(r) for r in poly_roots]
         self.poly_degree = len(poly_coefficients_list) - 1
 
@@ -85,17 +85,16 @@ class Polynomial:
 
         note=""
         if self.get_degree() == 2:
-            b2_4ac = math.pow(self.poly_coefficients_list[1],2)- 4*self.poly_coefficients_list[2]*self.poly_coefficients_list[0]
-            if b2_4ac<0:
-                note=" [imaginary]"
-
+            b2_4ac = math.pow(self.poly_coefficients_list[1] , 2) - 4 * self.poly_coefficients_list[2] * self.poly_coefficients_list[0]
+            if b2_4ac < 0:
+                note = " [imaginary]"
 
         result = ""
         reverse_poly_coefficients_list = list(reversed(self.poly_coefficients_list))
         for i in range(len(reverse_poly_coefficients_list)):
             coefficient = reverse_poly_coefficients_list[i]
             power = self.poly_degree - i
-            if isclose(coefficient, 0) :
+            if isclose(coefficient, 0):
                 pass
             else:
                 if len(result) != 0:
@@ -106,10 +105,10 @@ class Polynomial:
                 else:
                     if coefficient < 0:
                         result += "-"
-                if isclose(abs(coefficient),1) and power != 0:
+                if isclose(abs(coefficient), 1) and power != 0:
                     coefficient_string = ""
                 else:
-                    if coeff_format:
+                    if coeff_format is not None:
                         coefficient_string = coeff_format.format(abs(coefficient))
                     else:
                         coefficient_string = floatToString(abs(coefficient))
@@ -336,7 +335,7 @@ class Polynomial:
             new_guess = new_guess_poly.poly_roots[0]  # new_guess = x_intercept of tangent line
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
-            if self.get_degree()==1 and step_number==5:
+            if self.get_degree() == 1 and step_number == 5:
                  print("Updating guess for {} time: changed {:e} :: {}({:.5e})={:.5e} notclose[{:e}] used {}({:.5e}) to get to new_guess={:.5e}/new_value={:.5e}"
                        .format(step_number, current_guess-previous_guess, self, previous_guess, previous_value, epsilon, new_guess_poly.poly_printer(coeff_format="{}"), previous_guess, current_guess, current_value))
         if isclose(current_value, 0, abs_tol=epsilon):
@@ -444,8 +443,11 @@ class Polynomial:
                 loops += 1
             if loops >= max_steps_before_quitting != 0:
                 print("{}Could not find factorable root within {:.1e} after trying {} times. {}".format(
-                     "LINEAR!!" if factored_poly.get_degree()==1 else "",
+                     "LINEAR!!" if factored_poly.get_degree() == 1 else "",
                      epsilon , loops , factored_poly.poly_printer(coeff_format="{}")))
+                print("  Original poly: {}. All roots: {}".format(self, self.poly_roots))
+                print("  Roots found so far: {}".format(" || ".join(str(r) for r in poly_roots)))
+
                 break
         if sort_roots:
             poly_roots.sort()
@@ -598,7 +600,7 @@ def get_data_of_poly_roots_static_accuracy(num_observations , poly_degree , epsi
     for i in range(num_observations):
         polynomial = poly_maker(poly_degree)
 
-        poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 8192 , epsilon = epsilon , sort_roots = False)
+        poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
         percent_successful = len(poly_roots) / (len(poly_roots) + len(fail_roots))
         total_steps_taken = int(np.sum([r.steps_taken for r in poly_roots]))
 
@@ -793,7 +795,7 @@ calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_step
 print("Calc Roots: ", [root.x_value for root in calc_roots])
 print("Round Root: ", [root.x_value for root in root_rounder(calc_roots)])
 print("Root Steps: ", [root.steps_taken for root in calc_roots])
-print("Fail Roots: ", ', '.join(str(r) for r in fail_roots))
+print("Fail Roots: ", ' || '.join(str(r) for r in fail_roots))
 
 """
 question_poly = poly_maker(0, -5, 5, only_int_roots = True)
