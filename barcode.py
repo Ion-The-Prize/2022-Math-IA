@@ -42,6 +42,7 @@ class Bar:
 class BarCode:
     colors = []
 
+    title = None
     x_min = None  # type: float
     x_max = None  # type: float
     x_range = None  # type: float
@@ -55,11 +56,12 @@ class BarCode:
     pix_per_x = None  # type: int
     win = None  # type: GraphWin
 
+    close_on_click = False
     # Bars so far
     bars = {}
 
 
-    def __init__(self, _min_x, _max_x, _width=800, _height=300, num_colors=0):
+    def __init__(self, title, _min_x, _max_x, _width=800, _height=300, num_colors=0):
       """
       Initialize the barcode library
 
@@ -69,11 +71,12 @@ class BarCode:
      :param _height: How tall the barcode should be
      :param num_colors: How many random colors will be requested. This can be 0
       """
+      self.title = title
       self.x_min = _min_x
       self.x_max = _max_x
       self.win_width = _width
       self.win_height = _height
-      self.win = GraphWin("Barcode", self.win_width, self.win_height)
+      self.win = GraphWin(str(title), self.win_width, self.win_height)
 
       self.x_range = float(self.x_max-self.x_min)
       self.pix_per_x = float(self.win_width / self.x_range)
@@ -115,6 +118,13 @@ class BarCode:
                     self.y_range = 1
 
     def draw(self):
+        if not self.window_is_open():
+            return
+
+        if self.close_on_click and self.win.checkMouse():
+            self.close()
+            return
+
         self.win.autoflush=False
         rect = Rectangle(Point(0, 0), Point(self.win_width, self.win_height))
         rect.setFill('black');
@@ -125,3 +135,19 @@ class BarCode:
             if ( bar != None ):
                 bar.draw()
         self.win.flush()
+
+    def window_is_open(self):
+        return not self.win.closed
+
+    def await_click(self):
+        self.win.getMouse()
+
+    def await_click_and_close(self):
+        self.await_click()
+        self.close()
+
+    def close(self):
+        self.win.close()
+
+    def close_on_click(self):
+        self.close_on_click = True
