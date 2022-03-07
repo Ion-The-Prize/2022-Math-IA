@@ -685,8 +685,8 @@ for i in range(10):
     print()
 print("=====================================================================================================")
 
-#new_poly = poly_maker(7)
-new_poly = Polynomial([-540000, 942000, 1270600, -3988780, 2970020, -448640, -277200, 72000] , [-3.3333333333333335, 3.3333333333333335, -0.5, 1.0, 1.2, 1.25, 0.9])
+new_poly = poly_maker(7)
+#new_poly = Polynomial([-540000, 942000, 1270600, -3988780, 2970020, -448640, -277200, 72000] , [-3.3333333333333335, 3.3333333333333335, -0.5, 1.0, 1.2, 1.25, 0.9])
 print(new_poly.poly_printer(desmos_format = True))
 print(new_poly.poly_printer())
 print()
@@ -732,12 +732,13 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
                            , minimum , maximum , window_width , 200 , polynomial.poly_degree + 1)
     poly_barcode.close_on_click()
 
-    for i in range(window_width):
+    i = 0
+    for x in poly_barcode.get_x_range():
+        i += 1
         if i % 100 == 0:
             poly_barcode.draw()
-        x = minimum + (i * increment)
         root = polynomial.get_newton_root_from_point(starting_x = x , max_steps = 4096 , epsilon = epsilon)
-        # print("Newton Result: ", root)
+        print("Newton Result: ", root)
         if root.root_was_found:
             # Looking for what color the root bar should be
             for r in range(len(polynomial.poly_roots)):
@@ -752,12 +753,11 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
     print("Done drawing")
 
 
-
-#input("Press Enter to continue...")
+# input("Press Enter to continue...")
 BarcodePoly(new_poly , -15 , 15 , 1100)
 poly_barcode.await_click()
 
-# noinspection PyUnreachableCode
+
 def charter(poly_coefficient_list , poly_roots , steps_needed , starting_guesses , failed_roots = [] , epsilon = None , print_poly = False , print_poly_degree = False):
     """
     Puts a given polynomial and some information about that polynomial in handy chart form 
