@@ -409,7 +409,7 @@ class Polynomial:
                 failed_roots += [newton_result]
                 loops += 1
             if loops >= max_steps_before_quitting != 0:
-                print("Could not find factorable root after trying ", loops, " times.")
+                print("Could not find factorable root within {:.1e} after trying {} times. {:s}".format(epsilon , loops , factored_poly.poly_printer()))
                 break
         if sort_roots:
             poly_roots.sort()
@@ -562,14 +562,61 @@ def get_data_of_poly_roots_static_accuracy(num_observations , poly_degree , epsi
     for i in range(num_observations):
         polynomial = poly_maker(poly_degree)
 
-        poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 8192 , epsilon = epsilon , sort_roots = True)
-        average_steps_when_successful = np.average([r.steps_taken for r in poly_roots])
+        poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 8192 , epsilon = epsilon , sort_roots = False)
         percent_successful = len(poly_roots) / (len(poly_roots) + len(fail_roots))
+        total_steps_taken = int(np.sum([r.steps_taken for r in poly_roots]))
 
-        result_data_steps_when_successful.append(average_steps_when_successful)
+        result_data_steps_when_successful.append(total_steps_taken)
         result_data_percent_successful.append(percent_successful)
-    result_dataframe = pandas.DataFrame({'Steps When Successful':result_data_steps_when_successful , '% Successful':result_data_percent_successful})
-    return result_dataframe.describe() , result_dataframe
+    return result_data_steps_when_successful , result_data_percent_successful
+
+
+def static_accuracy_successful_steps_chart(num_observations , poly_degrees , epsilons):
+    """
+    :type num_observations: int
+    :type poly_degrees: list[int]
+    :type epsilons: list[float]
+    """
+
+    poly_degrees.sort()
+    epsilons.sort(reverse = True)
+
+    result_chart = pandas.DataFrame(index = poly_degrees)
+    for column in range(len(epsilons)):
+        column_data_ct = []
+        column_data_avg = []
+        column_data_std = []
+        column_data_min = []
+        column_data_25 = []
+        column_data_50 = []
+        column_data_75 = []
+        column_data_max = []
+        for row in range(len(poly_degrees)):
+            data , trash = get_data_of_poly_roots_static_accuracy(num_observations = num_observations , poly_degree = poly_degrees[row] , epsilon = epsilons[column])
+            column_data_ct.append(len(data))
+            column_data_avg.append(np.mean(data))
+            column_data_std.append(np.std(data))
+            column_data_min.append(np.min(data))
+            column_data_25.append(np.percentile(data , 25))
+            column_data_50.append(np.median(data))
+            column_data_75.append(np.percentile(data , 75))
+            column_data_max.append(np.max(data))
+        result_chart["{:.1e} {}".format(epsilons[column] , "ct")] = column_data_ct
+        result_chart["{:.1e} {}".format(epsilons[column] , "avg")] = column_data_avg
+        result_chart["{:.1e} {}".format(epsilons[column] , "std")] = column_data_std
+        result_chart["{:.1e} {}".format(epsilons[column] , "min")] = column_data_min
+        result_chart["{:.1e} {}".format(epsilons[column] , "25")] = column_data_25
+        result_chart["{:.1e} {}".format(epsilons[column] , "50")] = column_data_50
+        result_chart["{:.1e} {}".format(epsilons[column] , "75")] = column_data_75
+        result_chart["{:.1e} {}".format(epsilons[column] , "max")] = column_data_max
+    return result_chart
+
+
+poly_degrees = [5 , 6 , 7 , 8 , 9 , 10]
+epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-16]
+data_frame_test = static_accuracy_successful_steps_chart(30 , poly_degrees , epsilons)
+data_frame_test.to_excel(r'/temp/Math-IA/static_accuracy_successful_steps_chart2.xlsx', index = True, header=True)
+print(data_frame_test)
 
 
 def get_data_of_poly_roots_static_speed(num_observations , poly_degree , steps_taken):
@@ -581,10 +628,12 @@ def get_data_of_poly_roots_static_speed(num_observations , poly_degree , steps_t
 
         result_data_absolute_error.append(math.fabs(poly_root.y_value))
     result_dataframe = pandas.DataFrame(result_data_absolute_error)
-    return result_dataframe.describe() , result_dataframe
+    return result_dataframe , result_dataframe.describe()
 
 
-print(get_data_of_poly_roots_static_speed(500 , 10 , 32))
+# print(get_data_of_poly_roots_static_speed(500 , 10 , 32))
+shame = Polynomial([476280.00000361796 , 1905120.0])
+print(shame.get_newton_root_from_point(1))
 
 
 """
@@ -765,7 +814,7 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
             # print("Closest Epsilon: {:.2e} | Closest Root: {:.2f}".format(closest_epsilon , closest_exact_root))
             poly_barcode.add_bar(x = x , color_item = closest_exact_root , y = root.steps_taken)
         else:
-            poly_barcode.add_bar(x = x , color = WHITE , y = root.steps_taken)
+            poly_barcode.add_bar(x = x , color = GREY)
     for r in range(len(polynomial.poly_roots)):
         poly_barcode.add_bar(x = polynomial.poly_roots[r] , color = WHITE , y = None)
     poly_barcode.draw()
