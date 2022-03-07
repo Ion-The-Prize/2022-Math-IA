@@ -1,4 +1,6 @@
 # imports
+import math
+
 from barcode import *
 import random
 import pandas
@@ -372,7 +374,7 @@ class Polynomial:
         :param max_steps_before_quitting: the number of times it should loop without finding a root with y below epsilon
             before giving up, defaults to degree^2. If 0, will keep trying until a root below epsilon is found
         :type max_steps_before_quitting: int
-        :param epsilon: really small value, only roots with y values below epsilon will be counted as actual roots
+        :param epsilon: really small value, only roots with y values below epsilon will be counted as actual roots. If 0, will go up until max_steps_per_root
         :type epsilon: float
         :param guess_range_min: interval of guessing ("root range") minimum
         :type guess_range_min: float
@@ -554,10 +556,35 @@ def graph(polynomial , x_min = -15 , x_max = 15 , x_resolution = 300):
 #input("Press Enter to continue...")
 
 
-def get_data(num_observations):
-    successes = 0
-    failures = 0
-    return successes , failures
+def get_data_of_poly_roots_static_accuracy(num_observations , poly_degree , epsilon):
+    result_data_steps_when_successful = []
+    result_data_percent_successful = []
+    for i in range(num_observations):
+        polynomial = poly_maker(poly_degree)
+
+        poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 8192 , epsilon = epsilon , sort_roots = True)
+        average_steps_when_successful = np.average([r.steps_taken for r in poly_roots])
+        percent_successful = len(poly_roots) / (len(poly_roots) + len(fail_roots))
+
+        result_data_steps_when_successful.append(average_steps_when_successful)
+        result_data_percent_successful.append(percent_successful)
+    result_dataframe = pandas.DataFrame({'Steps When Successful':result_data_steps_when_successful , '% Successful':result_data_percent_successful})
+    return result_dataframe.describe() , result_dataframe
+
+
+def get_data_of_poly_roots_static_speed(num_observations , poly_degree , steps_taken):
+    result_data_absolute_error = []
+    for i in range(num_observations):
+        polynomial = poly_maker(poly_degree)
+        guess = (-BUILD_BINOMIAL_RANGE - 1) + (BUILD_BINOMIAL_RANGE + 2) * random.random()
+        poly_root = polynomial.get_newton_root_from_point(starting_x = guess , max_steps = steps_taken , epsilon = 0)
+
+        result_data_absolute_error.append(math.fabs(poly_root.y_value))
+    result_dataframe = pandas.DataFrame(result_data_absolute_error)
+    return result_dataframe.describe() , result_dataframe
+
+
+print(get_data_of_poly_roots_static_speed(500 , 10 , 32))
 
 
 """
