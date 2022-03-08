@@ -5,6 +5,7 @@ from barcode import *
 import random
 import pandas
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 from numpy import longdouble
 from math import isclose
@@ -12,8 +13,8 @@ from math import isclose
 # constants
 BUILD_BINOMIAL_RANGE = 10
 
-def floatToString(f):
-    return ('%.6f' % f).rstrip('0').rstrip('.')
+def floatToString(f, format_string="{:.6f}"):
+    return format_string.format(f).rstrip('0').rstrip('.')
 
 def wrap_float(f):
     """
@@ -239,6 +240,13 @@ class Polynomial:
         for i in range(len(self.poly_coefficients_list)):
             result += self.poly_coefficients_list[i] * (x ** i)
         return result
+
+    def evaluate_array(self, x):
+        y = np.empty(shape=(len(x), 1), dtype=float)
+        for i in range(len(x)):
+            y[i] = self.evaluate(x[i])
+
+        return y
 
     def poly_primer(self):
         """
@@ -566,28 +574,126 @@ def root_rounder(unrounded_poly_roots):
     return rounded_poly_roots
 
 
-def graph(polynomial , x_min = -15 , x_max = 15 , x_resolution = 300):
-    plt.style.use('_mpl-gallery')
+class ZoomPlot():
 
+    def __init__(self, polynomial):
+        self.polynomial = polynomial
+
+        if polynomial.poly_roots is not None:
+            sorted_roots = polynomial.poly_roots.copy()
+            sorted_roots.sort()
+            self.xmin = sorted_roots[0] - .1
+            self.xmax = sorted_roots[-1] + .1
+
+        else:
+            self.xmin = -10
+            self.xmax = 10
+
+        self.orig_xmin = self.xmin
+        self.orig_xmax = self.xmax
+
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111)
+
+        self.xpress = self.xmin
+        self.xrelease = self.xmax
+        self.resolution = 200
+        self.maxiters = 30
+
+        self.fig.canvas.mpl_connect('button_press_event', self.onpress)
+        self.fig.canvas.mpl_connect('button_release_event', self.onrelease)
+        self.plot()
+
+    def plot(self):
+        print("Plotting from {:.2f} to {:.2f}".format(self.xmin, self.xmax))
+        x = np.linspace(self.xmin, self.xmax, self.resolution)
+        y = self.polynomial.evaluate_array(x)
+        self.ax.clear()
+        self.ax.set_title(self.polynomial.poly_printer())
+        self.ax.plot(x, y, linewidth=2.0)
+        self.ax.yaxis.grid(True)
+
+        # Find the Zeros in the current view
+        zeros_x=[]
+        zeros_y=[]
+        for zero_x in self.polynomial.poly_roots:
+            if self.xmin<=zero_x<=self.xmax:
+                zeros_x.append(zero_x)
+                zeros_y.append(0)
+
+        self.ax.scatter(zeros_x, zeros_y)
+
+        #https://stackoverflow.com/a/43963231
+        plt.gcf().canvas.draw_idle()
+
+    def onpress(self, event):
+        if event.button == 3:
+            # Reset the original range on RIGHT click
+            self.xmin = self.orig_xmin
+            self.xmax = self.orig_xmax
+            self.plot()
+
+        if event.button == 1:
+            self.xpress = event.xdata
+            print("Saved press at: ", self.xpress)
+
+    def onrelease(self, event):
+        if event.button != 1: return
+        self.xrelease = event.xdata
+        print("Saved release at: ", self.xrelease)
+
+        self.xmin = min(self.xpress, self.xrelease)
+        self.xmax = max(self.xpress, self.xrelease)
+        self.plot()
+
+
+plot = ZoomPlot(poly_maker(5))
+plt.show()
+
+input("Press Enter to continue...")
+
+
+def graph(polynomial , x_min = None , x_max = None , x_resolution = 800, y_resolution=500):
+    print ("Plotting: {} (Roots: {})".format(polynomial, [floatToString(r, format_string="{:.3f}") for r in polynomial.poly_roots]))
+   # plt.style.use('_mpl-gallery')
+
+    if polynomial.poly_roots is not None:
+        roots = polynomial.poly_roots.copy()
+        roots.sort()
+        x_min = roots[0]-.1
+        x_max = roots[-1]+.1
+    else:
+        x_min=-10
+        x_max=10
     # make data
-    x_array = np.linspace(x_min , x_max , x_resolution)
-    y_array = np.empty(shape = (len(x_array) , 1) , dtype = float)
-    for i in range(len(x_array)):
-        y_array[i] = polynomial.evaluate(x_array[i])
+    x = np.linspace(x_min , x_max , x_resolution)
+
+    y = polynomial.evaluate_array(x)
 
     # plot
-    fig , ax = plt.subplots()
+    fig , ax = plt.subplots(figsize=(11, 5))
 
-    ax.plot(x_array , y_array , linewidth = 2.0)
+    #ax.plot(x, x, label='linear')  # Plot some data on the axes.
+    ax.plot(x , y , linewidth = 2.0, label=polynomial.poly_printer())
+    ax.set_title(polynomial.poly_printer())
 
-    ax.set(xlim = (x_min , x_max) , xticks = np.arange(x_min , x_max) ,
-           ylim = (-100 , 100) , yticks = np.arange(-100 , 100 , 10))
+    #ax.set_xlabel('x label')  # Add an x-label to the axes.
+    #ax.set_ylabel('y label')  # Add a y-label to the axes.
+    #ax.set_title("Simple Plot")  # Add a title to the axes.
+    ax.legend();  # Add a legend.
 
-    ax.yaxis.grid(False)
-    ax.xaxis.grid(False)
-    ax.yaxis(True)
+    # ax.set(xlim = (x_min , x_max) , xticks = np.arange(x_min , x_max) ,
+    #        ylim = (-100 , 100) , yticks = np.arange(-100 , 100 , 10))
+    #
+    # ax.yaxis.grid(False)
+    # ax.xaxis.grid(True)
+    ax.yaxis.grid(True)
+
+    plt.tight_layout()
+    #plt.margins(0.2)
 
     plt.show()
+
 
 
 #graph(poly_maker(5))
