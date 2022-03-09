@@ -25,12 +25,6 @@ def wrap_float(f):
 class CalculatedRoot:
     """A calculated root"""
 
-    x_value = None
-    y_value = None
-    steps_taken = None
-    root_was_found = None
-    starting_guess = None
-
     def __init__(self , x_value , y_value , steps_taken , starting_guess , root_was_found = True):
         self.x_value = x_value
         self.y_value = y_value
@@ -51,10 +45,6 @@ class CalculatedRoot:
 class Polynomial:
     """A polynomial"""
 
-    poly_coefficients_list = None
-    poly_roots = None  # None is you don't know the roots
-    poly_degree = None
-
     def __init__(self , poly_coefficients_list , poly_roots = None):
         """
 
@@ -66,6 +56,8 @@ class Polynomial:
         self.poly_coefficients_list = [wrap_float(c) for c in poly_coefficients_list]
         if poly_roots is not None:
             self.poly_roots = [wrap_float(r) for r in poly_roots]
+        else:
+            self.poly_roots = None
         self.poly_degree = len(poly_coefficients_list) - 1
 
     def __eq__(self, other):
@@ -320,22 +312,22 @@ class Polynomial:
         """
         Performs Newton's method for finding roots at a given x-value
 
-        :param starting_x:
-        :param max_steps:
-        :param epsilon:
-        :return:
+        :param starting_x: the x-value that Newton's method will be performed on
+        :param max_steps: maximum steps before a result is considered failed
+        :param epsilon: really small value that the y-value of a root approximation needs to be below for the root approximation to be considered an actual root
+        :return: CalculatedRoot
         """
 
         epsilon = wrap_float(epsilon)
         current_guess = wrap_float(starting_x)
         current_value = self.evaluate(current_guess)
         step_number = 0
-        while not isclose(current_value,0,abs_tol=epsilon):
+        while not isclose(current_value , 0 , abs_tol = epsilon):
             step_number += 1
             if step_number > max_steps:
                 break
-            previous_guess=current_guess
-            previous_value=current_value
+            previous_guess = current_guess
+            previous_value = current_value
 
             new_guess_poly = self.get_tangent_line(current_guess)
             if new_guess_poly.poly_roots is None:
@@ -344,8 +336,9 @@ class Polynomial:
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
             if self.get_degree() == 1 and step_number == 5:
+                # If the degree is 1, it should have converged long before getting to step 5
                  print("Updating guess for {} time: changed {:e} :: {}({:.5e})={:.5e} notclose[{:e}] used {}({:.5e}) to get to new_guess={:.5e}/new_value={:.5e}"
-                       .format(step_number, current_guess-previous_guess, self, previous_guess, previous_value, epsilon, new_guess_poly.poly_printer(coeff_format="{}"), previous_guess, current_guess, current_value))
+                       .format(step_number, current_guess-previous_guess, self, previous_guess, previous_value, epsilon, new_guess_poly.poly_printer(coeff_format = "{}"), previous_guess, current_guess, current_value))
         if isclose(current_value, 0, abs_tol=epsilon):
             return CalculatedRoot(current_guess , current_value , step_number , starting_x)
         else:
@@ -353,7 +346,7 @@ class Polynomial:
 
     def get_roots(self , max_steps = 20 , epsilon = 1e-8 , starting_guess_count = None ,
                   random_starting_guesses = True , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
-                  guess_range_max = BUILD_BINOMIAL_RANGE + 1, factor_roots = False , sort_roots = False):
+                  guess_range_max = BUILD_BINOMIAL_RANGE + 1 , sort_roots = False):
         """
         Uses Newton's method for finding roots of higher order polynomials.
 
@@ -369,9 +362,6 @@ class Polynomial:
         :type guess_range_min: float
         :param guess_range_max: interval of guessing ("root range") maximum
         :type guess_range_max: float
-        :param factor_roots: INCOMPATIBLE WITH EVENLY SPACED STARTING GUESSES... whether found roots will be factored out,
-            results in a list of the actual roots (will only factor out roots with y values below epsilon and will try again until all roots are found)
-        :type factor_roots: bool
         :param sort_roots: whether the final roots string will be sorted from most negative to most positive (default False)
         :type sort_roots: bool
         :return: tuple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)]]
@@ -459,7 +449,7 @@ class Polynomial:
                 break
         if sort_roots:
             poly_roots.sort()
-        return poly_roots , failed_roots ,remainders
+        return len(poly_roots) == self.get_degree() , poly_roots , failed_roots , remainders
 
     def poly_power(self , power , pascal = 0):
         """
@@ -647,10 +637,10 @@ class ZoomPlot():
         self.plot()
 
 
-plot = ZoomPlot(poly_maker(5))
-plt.show()
+#plot = ZoomPlot(poly_maker(5))
+#plt.show()
 
-input("Press Enter to continue...")
+#input("Press Enter to continue...")
 
 
 def graph(polynomial , x_min = None , x_max = None , x_resolution = 800, y_resolution=500):
@@ -695,38 +685,151 @@ def graph(polynomial , x_min = None , x_max = None , x_resolution = 800, y_resol
     plt.show()
 
 
-
 #graph(poly_maker(5))
 #input("Press Enter to continue...")
 
 
-def get_data_of_poly_roots_static_accuracy(num_observations , poly_degree , epsilon):
-    result_data_steps_when_successful = []
-    result_data_percent_successful = []
+def get_data_of_poly_roots_static_accuracy(num_observations , poly_degree , epsilon , only_int_roots = False):
+    result_total_steps_when_completely_successful = []
+    result_total_steps_successful_guess_when_completely_successful = []
+    result_percent_guesses_successful_when_completely_successful = []
+    result_wasted_steps = []
+    complete_fail_count = 0
     for i in range(num_observations):
-        polynomial = poly_maker(poly_degree)
+        polynomial = poly_maker(poly_degree , only_int_roots = only_int_roots)
 
-        poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
-        percent_successful = len(poly_roots) / (len(poly_roots) + len(fail_roots))
-        total_steps_taken = int(np.sum([r.steps_taken for r in poly_roots]))
+        solved_completely = False
+        while not solved_completely:  # carry on... this is just here for testing purposes
+            solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
 
-        result_data_steps_when_successful.append(total_steps_taken)
-        result_data_percent_successful.append(percent_successful)
-    return result_data_steps_when_successful , result_data_percent_successful
+        if solved_completely:
+            total_steps = int(np.sum([r.steps_taken for r in poly_roots])) + int(np.sum([r.steps_taken for r in fail_roots]))
+            total_steps_successful_guesses = int(np.sum([r.steps_taken for r in poly_roots]))
+            percent_guesses_successful = len(poly_roots) / (len(poly_roots) + len(fail_roots))
+            result_wasted_steps.append(int(np.sum([r.steps_taken for r in fail_roots])))
+
+            result_total_steps_when_completely_successful.append(total_steps)
+            result_total_steps_successful_guess_when_completely_successful.append(total_steps_successful_guesses)
+            result_percent_guesses_successful_when_completely_successful.append(percent_guesses_successful)
+        else:
+            result_wasted_steps.append(int(np.sum([r.steps_taken for r in poly_roots])) + int(np.sum([r.steps_taken for r in fail_roots])))
+            complete_fail_count += 1
+            i -= 1  # retry this polynomial because it didn't work
+    percent_steps_wasted = int(np.sum(result_wasted_steps)) / (int(np.sum(result_total_steps_successful_guess_when_completely_successful)) + int(np.sum(result_wasted_steps)))
+    return num_observations , complete_fail_count , result_wasted_steps , percent_steps_wasted , result_total_steps_when_completely_successful , result_total_steps_successful_guess_when_completely_successful , result_percent_guesses_successful_when_completely_successful
 
 
-def static_accuracy_successful_steps_chart(num_observations , poly_degrees , epsilons):
+def get_data_of_poly_roots_static_speed(num_observations , poly_degree , steps_taken , only_int_roots = False):
+    result_data_absolute_error = []
+    for i in range(num_observations):
+        polynomial = poly_maker(poly_degree , only_int_roots = only_int_roots)
+        guess = (-BUILD_BINOMIAL_RANGE - 1) + (BUILD_BINOMIAL_RANGE + 2) * random.random()
+        poly_root = polynomial.get_newton_root_from_point(starting_x = guess , max_steps = steps_taken , epsilon = 0)
+
+        result_data_absolute_error.append(math.fabs(poly_root.y_value))
+    return result_data_absolute_error
+
+
+class StatsAccumulator:
+    def __init__(self , name):
+        """
+        :type name: str
+        """
+        self.name = name
+        self.column_data_ct = []
+        self.column_data_avg = []
+        self.column_data_std = []
+        self.column_data_min = []
+        self.column_data_25 = []
+        self.column_data_50 = []
+        self.column_data_75 = []
+        self.column_data_max = []
+
+    def __repr__(self):
+        return "{} [{:d} values]".format(self.name , len(self.column_data_ct))
+
+    def append_data(self , data):
+        self.column_data_ct.append(len(data))
+        self.column_data_avg.append(np.mean(data))
+        self.column_data_std.append(np.std(data))
+        self.column_data_min.append(np.min(data))
+        self.column_data_25.append(np.percentile(data , 25))
+        self.column_data_50.append(np.median(data))
+        self.column_data_75.append(np.percentile(data , 75))
+        self.column_data_max.append(np.max(data))
+
+    def add_to_dataframe(self , dataframe):
+        dataframe["{} {}".format(self.name , "ct")] = self.column_data_ct
+        dataframe["{} {}".format(self.name , "avg")] = self.column_data_avg
+        dataframe["{} {}".format(self.name , "std")] = self.column_data_std
+        dataframe["{} {}".format(self.name , "min")] = self.column_data_min
+        dataframe["{} {}".format(self.name , "25")] = self.column_data_25
+        dataframe["{} {}".format(self.name , "50")] = self.column_data_50
+        dataframe["{} {}".format(self.name , "75")] = self.column_data_75
+        dataframe["{} {}".format(self.name , "max")] = self.column_data_max
+
+def static_accuracy_chart(num_observations , poly_degrees , epsilons , only_int_roots):
     """
     :type num_observations: int
     :type poly_degrees: list[int]
     :type epsilons: list[float]
+    :type only_int_roots: bool
     """
 
     poly_degrees.sort()
     epsilons.sort(reverse = True)
 
+    result = dict()
+    result["opfts"] = pandas.DataFrame(index = poly_degrees)
+    result["opsw"] = pandas.DataFrame(index = poly_degrees)
+    result["assw"] = pandas.DataFrame(index = poly_degrees)
+    result["sspgs"] = pandas.DataFrame(index = poly_degrees)
+    result["ssts"] = pandas.DataFrame(index = poly_degrees)
+    result["sssnfs"] = pandas.DataFrame(index = poly_degrees)
+
+    for epsilon in epsilons:
+        overall_percent_failure_to_solve = []
+        overall_percent_steps_wasted = []
+        accumulator_all_solves_steps_wasted = StatsAccumulator("{:.1e}".format(epsilon))
+        accumulator_successful_solves_percent_guesses_successful = StatsAccumulator("{:.1e}".format(epsilon))
+        accumulator_successful_solves_total_steps = StatsAccumulator("{:.1e}".format(epsilon))
+        accumulator_successful_solves_steps_needed_for_successes = StatsAccumulator("{:.1e}".format(epsilon))
+        for degree in poly_degrees:
+            num_samples , complete_fail_count , wasted_steps , percent_steps_wasted , \
+                tot_steps_when_completely_successful , \
+                tot_steps_successful_guess_when_completely_successful , \
+                percent_guesses_successful_when_completely_successful = \
+                get_data_of_poly_roots_static_accuracy(num_observations = num_observations ,
+                                                       poly_degree = degree ,
+                                                       epsilon = epsilon ,
+                                                       only_int_roots = only_int_roots)
+            overall_percent_failure_to_solve.append(complete_fail_count / num_samples)
+            overall_percent_steps_wasted.append(percent_steps_wasted)
+            accumulator_all_solves_steps_wasted.append_data(wasted_steps)
+            accumulator_successful_solves_percent_guesses_successful.append_data(percent_guesses_successful_when_completely_successful)
+            accumulator_successful_solves_total_steps.append_data(tot_steps_when_completely_successful)
+            accumulator_successful_solves_steps_needed_for_successes.append_data(tot_steps_successful_guess_when_completely_successful)
+        result["opfts"]["{:.1e}".format(epsilon)] = overall_percent_failure_to_solve
+        result["opsw"]["{:.1e}".format(epsilon)] = overall_percent_steps_wasted
+        accumulator_all_solves_steps_wasted.add_to_dataframe(result["assw"])
+        accumulator_successful_solves_percent_guesses_successful.add_to_dataframe(result["sspgs"])
+        accumulator_successful_solves_total_steps.add_to_dataframe(result["ssts"])
+        accumulator_successful_solves_steps_needed_for_successes.add_to_dataframe(result["sssnfs"])
+    return result
+
+
+def static_steps_absolute_error_chart(num_observations , poly_degrees , max_steps , only_int_roots):
+    """
+    :type num_observations: int
+    :type poly_degrees: list[int]
+    :type max_steps: list[int]
+    """
+
+    poly_degrees.sort()
+    max_steps.sort()
+
     result_chart = pandas.DataFrame(index = poly_degrees)
-    for column in range(len(epsilons)):
+    for column in range(len(max_steps)):
         column_data_ct = []
         column_data_avg = []
         column_data_std = []
@@ -736,7 +839,10 @@ def static_accuracy_successful_steps_chart(num_observations , poly_degrees , eps
         column_data_75 = []
         column_data_max = []
         for row in range(len(poly_degrees)):
-            data , trash = get_data_of_poly_roots_static_accuracy(num_observations = num_observations , poly_degree = poly_degrees[row] , epsilon = epsilons[column])
+            data = get_data_of_poly_roots_static_speed(num_observations = num_observations ,
+                                                       poly_degree = poly_degrees[row] ,
+                                                       steps_taken = max_steps[column] ,
+                                                       only_int_roots = only_int_roots)
             column_data_ct.append(len(data))
             column_data_avg.append(np.mean(data))
             column_data_std.append(np.std(data))
@@ -745,35 +851,33 @@ def static_accuracy_successful_steps_chart(num_observations , poly_degrees , eps
             column_data_50.append(np.median(data))
             column_data_75.append(np.percentile(data , 75))
             column_data_max.append(np.max(data))
-        result_chart["{:.1e} {}".format(epsilons[column] , "ct")] = column_data_ct
-        result_chart["{:.1e} {}".format(epsilons[column] , "avg")] = column_data_avg
-        result_chart["{:.1e} {}".format(epsilons[column] , "std")] = column_data_std
-        result_chart["{:.1e} {}".format(epsilons[column] , "min")] = column_data_min
-        result_chart["{:.1e} {}".format(epsilons[column] , "25")] = column_data_25
-        result_chart["{:.1e} {}".format(epsilons[column] , "50")] = column_data_50
-        result_chart["{:.1e} {}".format(epsilons[column] , "75")] = column_data_75
-        result_chart["{:.1e} {}".format(epsilons[column] , "max")] = column_data_max
+        result_chart["{:.1e} {}".format(max_steps[column] , "ct")] = column_data_ct
+        result_chart["{:.1e} {}".format(max_steps[column] , "avg")] = column_data_avg
+        result_chart["{:.1e} {}".format(max_steps[column] , "std")] = column_data_std
+        result_chart["{:.1e} {}".format(max_steps[column] , "min")] = column_data_min
+        result_chart["{:.1e} {}".format(max_steps[column] , "25")] = column_data_25
+        result_chart["{:.1e} {}".format(max_steps[column] , "50")] = column_data_50
+        result_chart["{:.1e} {}".format(max_steps[column] , "75")] = column_data_75
+        result_chart["{:.1e} {}".format(max_steps[column] , "max")] = column_data_max
     return result_chart
 
 
-poly_degrees = [5 , 6 , 7 , 8 , 9 , 10]
-epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-16]
-data_frame_test = static_accuracy_successful_steps_chart(30 , poly_degrees , epsilons)
-data_frame_test.to_excel(r'/tmp/Math-IA/static_accuracy_successful_steps_chart2.xlsx', index = True, header=True)
-print(data_frame_test)
+def dfs_tabs(df_list, sheet_list, file_name):
+    writer = pandas.ExcelWriter(file_name , engine = 'xlsxwriter')
+    for dataframe, sheet in zip(df_list, sheet_list):
+        dataframe.to_excel(writer, sheet_name = sheet, startrow = 0 , startcol = 0)
+    writer.save()
 
 
-def get_data_of_poly_roots_static_speed(num_observations , poly_degree , steps_taken):
-    result_data_absolute_error = []
-    for i in range(num_observations):
-        polynomial = poly_maker(poly_degree)
-        guess = (-BUILD_BINOMIAL_RANGE - 1) + (BUILD_BINOMIAL_RANGE + 2) * random.random()
-        poly_root = polynomial.get_newton_root_from_point(starting_x = guess , max_steps = steps_taken , epsilon = 0)
-
-        result_data_absolute_error.append(math.fabs(poly_root.y_value))
-    result_dataframe = pandas.DataFrame(result_data_absolute_error)
-    return result_dataframe , result_dataframe.describe()
-
+sample_size = 1
+poly_degrees = [1 , 2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10]
+epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-9 , 1e-12]
+static_accuracy_results = static_accuracy_chart(sample_size , poly_degrees , epsilons , False)
+# data_static_accuracy_percent_success = static_accuracy_chart(1 , poly_degrees , epsilons , False)
+iter = 0
+for sheet,df in static_accuracy_results.items():
+    df.to_excel(r'/Temp/Math-IA/static_accuracy_class3.xlsx', startcol = 0 , startrow = iter * len(poly_degrees) + 1 , sheet_name = "Data", index = True, header = True)
+    iter += 1
 
 # print(get_data_of_poly_roots_static_speed(500 , 10 , 32))
 shame = Polynomial([476280.00000361796 , 1905120.0])
@@ -897,7 +1001,7 @@ print(new_poly.poly_printer())
 print()
 print("Poly Coeff: ", new_poly.poly_coefficients_list)
 print("Real Roots: ", new_poly.poly_roots)
-calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_steps_before_quitting = 50 , epsilon = 1e-9)
+solved_completely , calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_steps_before_quitting = 50 , epsilon = 1e-9)
 print("Calc Roots: ", [root.x_value for root in calc_roots])
 print("Round Root: ", [root.x_value for root in root_rounder(calc_roots)])
 print("Root Steps: ", [root.steps_taken for root in calc_roots])
@@ -965,8 +1069,9 @@ def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
     print("Done drawing")
 
 
+special_basin_poly = Polynomial([12 , -11 , -2 , 1] , [4 , 1 , -3])
 input("Press Enter to continue...")
-BarcodePoly(new_poly , -15 , 15 , 1100)
+BarcodePoly(special_basin_poly , -15 , 15 , 1100)
 poly_barcode.await_click()
 
 
