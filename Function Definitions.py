@@ -10,6 +10,7 @@ import numpy as np
 from numpy import longdouble
 from math import isclose
 
+
 # constants
 BUILD_BINOMIAL_RANGE = 10
 
@@ -25,21 +26,33 @@ def wrap_float(f):
 class CalculatedRoot:
     """A calculated root"""
 
-    def __init__(self , x_value , y_value , steps_taken , starting_guess , root_was_found = True):
+    def __init__(self , x_value , y_value , steps_taken , starting_guess , guess_history=None, root_was_found = True, failure_reason=None):
         self.x_value = x_value
         self.y_value = y_value
         self.steps_taken = steps_taken
+        self.guess_history = guess_history
         self.starting_guess = starting_guess
         self.root_was_found = root_was_found
+        self.failure_reason = failure_reason
+        self.associated_real_root = None
+        self.x_error = None
 
     def __repr__(self):
         if self.root_was_found:
-            return "x={:.3f} #{:d} @{:.3f}".format(self.x_value , self.steps_taken , self.starting_guess)
+            return "x={:.3f} {} (#{:d} from {:.3f})".format(
+                self.x_value ,
+                "err={:g}".format(self.x_error) if self.x_error is not None else "" ,
+                self.steps_taken ,
+                self.starting_guess)
         else:
-            return "FAIL: x={:.3f}->{:.3e}(#{:d}@{:.3f})".format(self.x_value , self.y_value , self.steps_taken , self.starting_guess)
+            return "FAIL ({}): (x,y)=({:.3f}, {:.3e})(#{:d} from {:.3f})".format(self.failure_reason, self.x_value , self.y_value , self.steps_taken , self.starting_guess)
 
     def was_found(self):
         return self.root_was_found
+
+    def associate_with_real_root(self, real_root):
+        self.associated_real_root = real_root
+        self.x_error = self.associated_real_root - self.x_value
 
 
 class Polynomial:
@@ -64,7 +77,7 @@ class Polynomial:
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
-        return self.poly_printer()
+        return self.poly_printer() + '::' + str(self.poly_coefficients_list)
 
     def poly_printer(self , desmos_format = False, coeff_format = None):
         """
@@ -318,9 +331,11 @@ class Polynomial:
         :return: CalculatedRoot
         """
 
+        guess_history=[]
         epsilon = wrap_float(epsilon)
         current_guess = wrap_float(starting_x)
         current_value = self.evaluate(current_guess)
+        guess_history.append(current_guess)
         step_number = 0
         while not isclose(current_value , 0 , abs_tol = epsilon):
             step_number += 1
@@ -331,18 +346,23 @@ class Polynomial:
 
             new_guess_poly = self.get_tangent_line(current_guess)
             if new_guess_poly.poly_roots is None:
-                return CalculatedRoot(current_guess , current_value , step_number , starting_x , root_was_found = False)
+                return CalculatedRoot(current_guess , current_value , step_number , starting_x , guess_history=guess_history, root_was_found = False, failure_reason='zero derivative')
             new_guess = new_guess_poly.poly_roots[0]  # new_guess = x_intercept of tangent line
+            if isclose(current_guess, new_guess):
+                return CalculatedRoot(current_guess, current_value, step_number, starting_x,
+                                      guess_history=guess_history, root_was_found=False,
+                                      failure_reason='no progress')
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
+            guess_history.append(current_guess)
             if self.get_degree() == 1 and step_number == 5:
                 # If the degree is 1, it should have converged long before getting to step 5
                  print("Updating guess for {} time: changed {:e} :: {}({:.5e})={:.5e} notclose[{:e}] used {}({:.5e}) to get to new_guess={:.5e}/new_value={:.5e}"
                        .format(step_number, current_guess-previous_guess, self, previous_guess, previous_value, epsilon, new_guess_poly.poly_printer(coeff_format = "{}"), previous_guess, current_guess, current_value))
         if isclose(current_value, 0, abs_tol=epsilon):
-            return CalculatedRoot(current_guess , current_value , step_number , starting_x)
+            return CalculatedRoot(current_guess , current_value , step_number , starting_x, guess_history=guess_history)
         else:
-            return CalculatedRoot(current_guess , current_value , step_number , starting_x , root_was_found = False)
+            return CalculatedRoot(current_guess , current_value , step_number , starting_x , guess_history=guess_history, root_was_found = False, failure_reason='too many steps')
 
     def get_roots(self , max_steps = 20 , epsilon = 1e-8 , starting_guess_count = None ,
                   random_starting_guesses = True , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
@@ -419,6 +439,7 @@ class Polynomial:
         if max_steps_before_quitting is None:
             max_steps_before_quitting = self.poly_degree ** 2
 
+        real_roots_left = self.poly_roots
         poly_roots = []
         failed_roots = []
         remainders = []
@@ -428,6 +449,17 @@ class Polynomial:
             guess = guess_range_min + (guess_range_max - guess_range_min) * random.random()
             newton_result = factored_poly.get_newton_root_from_point(guess , max_steps_per_root , epsilon)
             if newton_result.root_was_found:
+                found_root = newton_result.x_value
+                if self.poly_roots is not None:
+                    matching_real_root=None
+                    for real_root in real_roots_left:
+                        # if we haven't found a matching real root yet or if this real_root is closer than the one we already matched
+                        if matching_real_root is None or abs(real_root-found_root) < abs(matching_real_root-found_root):
+                            matching_real_root = real_root
+                    # print("Found root {:.3f} is closest to real root {:.3f} [diff={:g}]".format(found_root, matching_real_root, (matching_real_root-found_root)))
+                    newton_result.associate_with_real_root(matching_real_root)
+                    real_roots_left.remove(matching_real_root)
+
                 factor = make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
                 factored_poly , factor_remainder = factored_poly.divide(factor)  # remainder's only returned; never used
                 # print("Factor         " , factor.poly_printer())
@@ -445,6 +477,9 @@ class Polynomial:
                      epsilon , loops , factored_poly.poly_printer(coeff_format="{}")))
                 print("  Original poly: {}. All roots: {}".format(self, self.poly_roots))
                 print("  Roots found so far: {}".format(" || ".join(str(r) for r in poly_roots)))
+                print("  Failed root[0]: ", failed_roots[0])
+                print("  Failed root[0] guess history: ",['{:.3e}'.format(g) for g in failed_roots[0].guess_history])
+                print("==")
 
                 break
         if sort_roots:
@@ -695,10 +730,9 @@ def get_data_of_poly_roots_static_accuracy(num_observations , poly_degree , epsi
     result_wasted_steps = []
     complete_fail_count = 0
     for i in range(num_observations):
-        polynomial = poly_maker(poly_degree , only_int_roots = only_int_roots)
-
         solved_completely = False
         while not solved_completely:  # carry on... this is just here for testing purposes
+            polynomial = poly_maker(poly_degree, only_int_roots=only_int_roots)
             solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
 
         if solved_completely:
@@ -794,6 +828,7 @@ def static_accuracy_chart(num_observations , poly_degrees , epsilons , only_int_
         accumulator_successful_solves_total_steps = StatsAccumulator("{:.1e}".format(epsilon))
         accumulator_successful_solves_steps_needed_for_successes = StatsAccumulator("{:.1e}".format(epsilon))
         for degree in poly_degrees:
+            print("Working on x^{:d} polynomials with epsilon {:e}".format(degree, epsilon))
             num_samples , complete_fail_count , wasted_steps , percent_steps_wasted , \
                 tot_steps_when_completely_successful , \
                 tot_steps_successful_guess_when_completely_successful , \
@@ -861,22 +896,24 @@ def static_steps_absolute_error_chart(num_observations , poly_degrees , max_step
     return result_chart
 
 
-def dfs_tabs(df_list, sheet_list, file_name):
+def save_dataframes_to_tabs_of_file(df_dict, file_name):
     writer = pandas.ExcelWriter(file_name , engine = 'xlsxwriter')
-    for dataframe, sheet in zip(df_list, sheet_list):
+    for sheet, dataframe in df_dict.items():
         dataframe.to_excel(writer, sheet_name = sheet, startrow = 0 , startcol = 0)
     writer.save()
 
 
 sample_size = 1
 poly_degrees = [1 , 2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10]
-epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-9 , 1e-12]
+epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-9 ]#, 1e-12]
 static_accuracy_results = static_accuracy_chart(sample_size , poly_degrees , epsilons , False)
 # data_static_accuracy_percent_success = static_accuracy_chart(1 , poly_degrees , epsilons , False)
 iter = 0
-for sheet,df in static_accuracy_results.items():
-    df.to_excel(r'/Temp/Math-IA/static_accuracy_class3.xlsx', startcol = 0 , startrow = iter * len(poly_degrees) + 1 , sheet_name = "Data", index = True, header = True)
-    iter += 1
+
+save_dataframes_to_tabs_of_file(static_accuracy_results, r'/tmp/Math-IA/static_accuracy_class3.xlsx')
+# for sheet,df in static_accuracy_results.items():
+#     df.to_excel(r'/temp/Math-IA/static_accuracy_class3.xlsx',  sheet_name = sheet, index = True, header = True)
+#     iter += 1
 
 # print(get_data_of_poly_roots_static_speed(500 , 10 , 32))
 shame = Polynomial([476280.00000361796 , 1905120.0])
