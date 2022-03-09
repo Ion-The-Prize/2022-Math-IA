@@ -1,6 +1,7 @@
 # imports
 import math
 
+import barcode
 from barcode import *
 import random
 import pandas
@@ -508,6 +509,70 @@ class Polynomial:
                       current_answer.poly_coefficients_list)  # numbers rows of pascal's triangle as degree of poly from a binomial (so [1 2 1] is row 2)
         return current_answer
 
+    def open_barcode_window(self, minimum, maximum, window_width, epsilon=1e-8):
+        """
+
+        :param minimum:
+        :type minimum: float
+        :param maximum:
+        :type maximum: float
+        :param window_width:
+        :param epsilon:
+        :type epsilon: float
+        :return:
+        """
+
+        assert (maximum > minimum)
+        poly_barcode = BarCode("{:s} | Roots @x = {:s}".format(self.poly_printer(), ",".join(
+            ["{:.3f}".format(r) for r in sorted(self.poly_roots)]))
+                               , minimum, maximum, window_width, 200, self.poly_degree + 1)
+        poly_barcode.close_on_click()
+
+        self.fill_barcode(poly_barcode, epsilon)
+        return poly_barcode
+
+    def fill_barcode(self, poly_barcode, epsilon=1e-8):
+        if self.poly_roots is not None:
+            for r in self.poly_roots:
+                poly_barcode.assign_color_number_to_item(r)
+
+        i = 0
+        for x in poly_barcode.get_x_range():
+            i += 1
+            if i % 100 == 0:
+                poly_barcode.draw()
+            root = self.get_newton_root_from_point(starting_x=x, max_steps=128, epsilon=epsilon)
+            print("Newton Result: ", root)
+            if root.root_was_found:
+                # Looking for what color the root bar should be
+                closest_exact_root = self.get_closest_exact_root(root.x_value)
+                poly_barcode.add_bar(x=x, color_item=closest_exact_root, y=root.steps_taken)
+            else:
+                poly_barcode.add_bar(x=x, color=GREY)
+
+        # Draw the actual roots with White lines
+        for r in range(len(self.poly_roots)):
+            poly_barcode.add_bar(x=self.poly_roots[r], color=WHITE, y=None)
+        poly_barcode.draw()
+        print("Done filling barcode")
+
+    def get_closest_exact_root(self, approximate_root):
+        closest_exact_root = None
+        closest_epsilon = None
+        assert self.poly_roots is not None
+
+        for exact_root in self.poly_roots:
+            if isclose(exact_root, approximate_root):
+                return exact_root
+
+            current_epsilon = abs(approximate_root - exact_root)
+            if closest_exact_root is None or closest_epsilon > current_epsilon:
+                closest_exact_root = exact_root
+                closest_epsilon = current_epsilon
+        # print("Closest Epsilon: {:.2e} | Closest Root: {:.2f}".format(closest_epsilon , closest_exact_root))
+
+        return closest_exact_root
+
 
 def build_a_monomial(leading_coefficient , degree):
     """
@@ -601,8 +666,10 @@ def root_rounder(unrounded_poly_roots):
 
 class ZoomPlot():
 
-    def __init__(self, polynomial):
+    def __init__(self, polynomial, color_points_with_newton_root=False):
         self.polynomial = polynomial
+        self.color_points_with_newton_root = color_points_with_newton_root
+        self.color_assignments = MappedColorPalette(self.polynomial.poly_roots)
 
         if polynomial.poly_roots is not None:
             sorted_roots = polynomial.poly_roots.copy()
@@ -633,21 +700,35 @@ class ZoomPlot():
         print("Plotting from {:.2f} to {:.2f}".format(self.xmin, self.xmax))
         x = np.linspace(self.xmin, self.xmax, self.resolution)
         y = self.polynomial.evaluate_array(x)
+        if self.color_points_with_newton_root:
+            point_colors = []
+            for x_val in x:
+                newton_result = self.polynomial.get_newton_root_from_point(x_val)
+                if newton_result.root_was_found:
+                    exact_root = self.polynomial.get_closest_exact_root(newton_result.x_value)
+                    point_colors.append(self.color_assignments.get_color(exact_root))
+                else:
+                    point_colors.append('gray')
+        else:
+            point_colors = 'red'
+
         self.ax.clear()
         self.ax.set_title(self.polynomial.poly_printer())
-        self.ax.plot(x, y, linewidth=2.0)
+        self.ax.scatter(x, y, color=point_colors, s=5)
         self.ax.yaxis.grid(True)
 
         # Find the Zeros in the current view
         zeros_x=[]
         zeros_y=[]
+        zeros_c=[]
         for zero_x in self.polynomial.poly_roots:
             if self.xmin<=zero_x<=self.xmax:
                 zeros_x.append(zero_x)
                 zeros_y.append(0)
+                zeros_c.append(self.color_assignments.get_color(zero_x))
 
         #https://www.adamsmith.haus/python/answers/how-to-plot-points-in-matplotlib-in-python
-        self.ax.scatter(zeros_x, zeros_y)
+        self.ax.scatter(zeros_x, zeros_y, color=zeros_c)
 
         #https://stackoverflow.com/a/43963231
         plt.gcf().canvas.draw_idle()
@@ -666,15 +747,22 @@ class ZoomPlot():
         if event.button != 1: return
         self.xrelease = event.xdata
 
+        if self.xpress is None or self.xrelease is None:
+            return
+
+        #ignore errant clicks (less than 1/20 of screen)
+        if abs(self.xrelease - self.xpress) < 0.05*(self.xmax - self.xmin):
+            return
+
         self.xmin = min(self.xpress, self.xrelease)
         self.xmax = max(self.xpress, self.xrelease)
         self.plot()
 
 
-#plot = ZoomPlot(poly_maker(5))
-#plt.show()
+plot = ZoomPlot(poly_maker(5), color_points_with_newton_root=True)
+plt.show()
 
-#input("Press Enter to continue...")
+input("Press Enter to continue...")
 
 
 def graph(polynomial , x_min = None , x_max = None , x_resolution = 800, y_resolution=500):
@@ -1051,63 +1139,11 @@ print("Zeros at x = ", question_poly[1])
 
 
 # print(poly_printer(poly_power(10, pascal = 0)))
-poly_barcode = None
-
-
-def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
-    """
-
-    :param polynomial:
-    :type polynomial: Polynomial
-    :param minimum:
-    :type minimum: float
-    :param maximum:
-    :type maximum: float
-    :param window_width:
-    :param epsilon:
-    :type epsilon: float
-    :return:
-    """
-
-    assert (maximum > minimum)
-
-    global poly_barcode
-    poly_barcode = BarCode("{:s} | Roots @x = {:s}".format(polynomial.poly_printer() , ",".join(["{:.3f}".format(r) for r in sorted(polynomial.poly_roots)]))
-                           , minimum , maximum , window_width , 200 , polynomial.poly_degree + 1)
-    poly_barcode.close_on_click()
-
-    for i in range(len(polynomial.poly_roots)):
-        poly_barcode.assign_color_number_to_item(polynomial.poly_roots[i] , i)
-
-    i = 0
-    for x in poly_barcode.get_x_range():
-        i += 1
-        if i % 100 == 0:
-            poly_barcode.draw()
-        root = polynomial.get_newton_root_from_point(starting_x = x , max_steps = 128 , epsilon = epsilon)
-        print("Newton Result: ", root)
-        if root.root_was_found:
-            # Looking for what color the root bar should be
-            closest_exact_root = None
-            closest_epsilon = None
-            for r in range(len(polynomial.poly_roots)):
-                current_epsilon = abs(root.x_value - polynomial.poly_roots[r])
-                if closest_exact_root is None or closest_epsilon > current_epsilon:
-                    closest_exact_root = polynomial.poly_roots[r]
-                    closest_epsilon = current_epsilon
-            # print("Closest Epsilon: {:.2e} | Closest Root: {:.2f}".format(closest_epsilon , closest_exact_root))
-            poly_barcode.add_bar(x = x , color_item = closest_exact_root , y = root.steps_taken)
-        else:
-            poly_barcode.add_bar(x = x , color = GREY)
-    for r in range(len(polynomial.poly_roots)):
-        poly_barcode.add_bar(x = polynomial.poly_roots[r] , color = WHITE , y = None)
-    poly_barcode.draw()
-    print("Done drawing")
 
 
 special_basin_poly = Polynomial([12 , -11 , -2 , 1] , [4 , 1 , -3])
 input("Press Enter to continue...")
-BarcodePoly(special_basin_poly , -15 , 15 , 1100)
+poly_barcode = BarcodePoly(special_basin_poly , -15 , 15 , 1100)
 poly_barcode.await_click()
 
 

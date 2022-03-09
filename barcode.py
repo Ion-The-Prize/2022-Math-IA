@@ -15,6 +15,32 @@ color_palette.remove('white')
 WHITE=color_rgb(255,255,255)
 GREY=color_rgb(100,100,100)
 
+class MappedColorPalette:
+    def __init__(self, color_keys = None):
+        self.color_map={}
+        self.next_color=0
+        if color_keys is not None:
+            for key in color_keys:
+                self.map_color(key)
+
+    def map_color(self, key):
+        global color_palette
+        self.color_map[key] = color_palette[self.next_color]
+        self.next_color += 1
+        return self.get_color(key)
+
+    def get_color(self, key):
+        # automatically assign a color to key if one hasn't been already
+        if self.color_map.get(key) is None:
+            self.map_color(key)
+        return self.color_map[key]
+
+    def is_empty(self):
+        return len(self.color_map)==0
+
+    def items(self):
+        return self.color_map.items()
+
 class Bar:
     """A bar on the barcode"""
     barcode=None
@@ -34,6 +60,13 @@ class Bar:
         barcode.bars[self.x_pix] = self
 
     def draw(self):
+        if not self.barcode.window_is_open():
+            return
+
+        # are we still in the bounds of our barcode?
+        if self.x < self.barcode.x_min or self.x > self.barcode.x_max:
+            return
+
         if self.y is None :
             y_top=0
         else:
@@ -48,30 +81,6 @@ class Bar:
 class BarCode:
     # Colors always come from this web palette
     colors = color_palette
-    item2color = dict()
-
-    title = None
-    x_min = None  # type: float
-    x_max = None  # type: float
-    x_range = None  # type: float
-
-    x_tick_marks=[] #type: list[float]
-
-
-    y_min = None  # type: float
-    y_max = None  # type: float
-    y_range = None  # type: float
-    y_tick_marks=[] #type: list[float]
-
-    win_width = None  # type: int
-    graph_height = None  # type: int
-    pix_per_x = None  # type: int
-    win = None  # type: GraphWin
-
-    close_on_click = False
-    # Bars so far
-    bars = {}
-
 
     def __init__(self, title, _min_x, _max_x, _width=800, _height=300, num_colors=0, _num_ticks_x=10):
       """
@@ -85,19 +94,28 @@ class BarCode:
       """
       assert num_colors<len(self.colors)
 
+      #Bars, indexed by x pixel
+      self.bars = {}
       self.title = title
-      self.x_min = _min_x
-      self.x_max = _max_x
       self.num_ticks_x = _num_ticks_x
-
-      self.x_tick_marks = self.get_tick_marks(self.x_min, self.x_max, 10)
+      self.item2color = MappedColorPalette()
 
       self.win_width = _width
       self.graph_height = _height
+      self.set_x_range(_min_x, _max_x)
       self.win = GraphWin(str(title), self.win_width, self.graph_height+100)
 
-      self.x_range = float(self.x_max-self.x_min)
-      self.pix_per_x = float(self.win_width / self.x_range)
+    def set_x_range(self, xmin, xmax):
+        assert xmax > xmin
+        print("Barcode: Setting x_range to [{:g} to {:g}]".format(xmin, xmax))
+
+        self.x_min=xmin
+        self.x_max=xmax
+        self.y_min=None
+        self.y_max=None
+        self.x_range = float(self.x_max - self.x_min)
+        self.pix_per_x = float(self.win_width / self.x_range)
+        self.x_per_pix = 1/self.pix_per_x
 
     def get_tick_marks(self, min, max, num_tick_marks):
         if min is None or max is None:
@@ -122,8 +140,17 @@ class BarCode:
             tick += tick_inc
         return result
 
-    def assign_color_number_to_item(self, item, color_number):
-        self.item2color[item] = self.colors[color_number]
+    def get_tick_marks_x(self):
+        return self.get_tick_marks(self.x_min, self.x_max, self.num_ticks_x)
+
+    def get_tick_marks_y(self):
+        if self.y_min is None:
+            return []
+
+        return self.get_tick_marks(self.y_min, self.y_max, 5)
+
+    def assign_color_number_to_item(self, item):
+        return self.item2color.map_color(item)
 
 
     def add_bar(self, x, color_num = None, color = None, color_item = None, y = None):
@@ -138,14 +165,16 @@ class BarCode:
         """
         assert(color_num is not None or color is not None or color_item is not None)
         assert(color_num is None or color_num<len(self.colors))
-        assert(color_item is None or self.item2color[color_item] is not None)
-        assert(self.x_min<=x<=self.x_max)
+        assert(color_item is None or self.item2color.get_color(color_item) is not None)
+        if not (self.x_min<=x<=self.x_max):
+            #print("Ignoring bar: new bar at x={:g} is not between x_min={:g} and x_max={:g}".format(x, self.x_min, self.x_max))
+            return
 
         if color_num:
             color=self.colors[color_num]
 
         if color_item:
-            color=self.item2color[color_item]
+            color=self.item2color.get_color(color_item)
 
         b=Bar(self, x, color, y)
 
@@ -184,10 +213,10 @@ class BarCode:
 
         for x_pix in range(self.win_width):
             bar=self.bars.get(x_pix)
-            if bar != None :
+            if bar is not None :
                 bar.draw()
 
-        for tick_x in self.x_tick_marks:
+        for tick_x in self.get_tick_marks_x():
             x_pix = (tick_x - self.x_min) * self.pix_per_x
             line = Line(Point(x_pix, int(self.graph_height * 0.75)), Point(x_pix, self.graph_height))
             line.setFill(WHITE)
@@ -197,22 +226,21 @@ class BarCode:
             label.setFill('white')
             label.draw(self.win)
 
-        if len(self.y_tick_marks) > 0:
-            for tick_y in self.y_tick_marks:
-                y_pix = self.get_y_graph_pixel(tick_y)
-                line = Line(Point(0, y_pix), Point(25, y_pix))
-                line.setFill(WHITE)
-                line.draw(self.win)
-                label = Text(Point(20, y_pix), "{:.1f}".format(tick_y))
-                label.setSize(18)
-                label.setFill('white')
-                label.draw(self.win)
+        for tick_y in self.get_tick_marks_y():
+            y_pix = self.get_y_graph_pixel(tick_y)
+            line = Line(Point(0, y_pix), Point(25, y_pix))
+            line.setFill(WHITE)
+            line.draw(self.win)
+            label = Text(Point(20, y_pix), "{:.1f}".format(tick_y))
+            label.setSize(18)
+            label.setFill('white')
+            label.draw(self.win)
 
 
 
         swatch_width=5
         swatch_height=30
-        if len(self.item2color) == 0:
+        if self.item2color.is_empty():
             # No items/values assigned to colors... just show colors along bottom
             for i in range(len(self.colors)):
                 ul = Point(i*swatch_width,self.graph_height)
