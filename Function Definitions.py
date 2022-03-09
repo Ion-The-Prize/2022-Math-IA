@@ -611,6 +611,7 @@ class ZoomPlot():
                 zeros_x.append(zero_x)
                 zeros_y.append(0)
 
+        #https://www.adamsmith.haus/python/answers/how-to-plot-points-in-matplotlib-in-python
         self.ax.scatter(zeros_x, zeros_y)
 
         #https://stackoverflow.com/a/43963231
@@ -625,12 +626,10 @@ class ZoomPlot():
 
         if event.button == 1:
             self.xpress = event.xdata
-            print("Saved press at: ", self.xpress)
 
     def onrelease(self, event):
         if event.button != 1: return
         self.xrelease = event.xdata
-        print("Saved release at: ", self.xrelease)
 
         self.xmin = min(self.xpress, self.xrelease)
         self.xmax = max(self.xpress, self.xrelease)
