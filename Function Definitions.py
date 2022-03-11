@@ -414,7 +414,7 @@ class Polynomial:
         return poly_roots , failed_roots
 
     def get_roots_with_dividing(self , max_steps_per_root = 20 , max_steps_before_quitting = None, epsilon = 1e-10 , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
-                  guess_range_max = BUILD_BINOMIAL_RANGE + 1, sort_roots = False):
+                  guess_range_max = BUILD_BINOMIAL_RANGE + 1, sort_roots = False , human_dividing = False):
         """
         Uses Newton's method for finding roots of higher order polynomials. After finding a root, it is factored out
             of the polynomial, resulting in all the actual roots with no extra repeats
@@ -433,6 +433,7 @@ class Polynomial:
         :type guess_range_max: float
         :param sort_roots: whether the final roots string will be sorted from most negative to most positive (default False)
         :type sort_roots: bool
+        :param human_dividing: whether the factored out roots will be the actual root (True) or the calculated one (False)
         :return: triple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)] , list[Polynomial (remainders)]]
         """
 
@@ -451,16 +452,18 @@ class Polynomial:
             if newton_result.root_was_found:
                 found_root = newton_result.x_value
                 if self.poly_roots is not None:
-                    matching_real_root=None
+                    matching_real_root = None
                     for real_root in real_roots_left:
                         # if we haven't found a matching real root yet or if this real_root is closer than the one we already matched
-                        if matching_real_root is None or abs(real_root-found_root) < abs(matching_real_root-found_root):
+                        if matching_real_root is None or abs(real_root - found_root) < abs(matching_real_root - found_root):
                             matching_real_root = real_root
                     # print("Found root {:.3f} is closest to real root {:.3f} [diff={:g}]".format(found_root, matching_real_root, (matching_real_root-found_root)))
                     newton_result.associate_with_real_root(matching_real_root)
                     real_roots_left.remove(matching_real_root)
 
-                factor = make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
+                    factor = make_polynomial_from_coefficients(-1.0 * newton_result.associated_real_root , 1.0) if human_dividing else make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
+                else:
+                    factor = make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
                 factored_poly , factor_remainder = factored_poly.divide(factor)  # remainder's only returned; never used
                 # print("Factor         " , factor.poly_printer())
                 # print("Remaining Poly:" , factored_poly.poly_printer())
@@ -730,10 +733,15 @@ def get_data_of_poly_roots_static_accuracy(num_observations , poly_degree , epsi
     result_wasted_steps = []
     complete_fail_count = 0
     for i in range(num_observations):
+        """
+        # For testing when speed is important (so low sample sizes will not throw errors about arrays being empty)
         solved_completely = False
         while not solved_completely:  # carry on... this is just here for testing purposes
             polynomial = poly_maker(poly_degree, only_int_roots=only_int_roots)
             solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
+        """
+        polynomial = poly_maker(poly_degree , only_int_roots = only_int_roots)
+        solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
 
         if solved_completely:
             total_steps = int(np.sum([r.steps_taken for r in poly_roots])) + int(np.sum([r.steps_taken for r in fail_roots]))
@@ -813,12 +821,12 @@ def static_accuracy_chart(num_observations , poly_degrees , epsilons , only_int_
     epsilons.sort(reverse = True)
 
     result = dict()
-    result["opfts"] = pandas.DataFrame(index = poly_degrees)
-    result["opsw"] = pandas.DataFrame(index = poly_degrees)
-    result["assw"] = pandas.DataFrame(index = poly_degrees)
-    result["sspgs"] = pandas.DataFrame(index = poly_degrees)
-    result["ssts"] = pandas.DataFrame(index = poly_degrees)
-    result["sssnfs"] = pandas.DataFrame(index = poly_degrees)
+    result["opfts"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [that] failed to solve
+    result["opsw"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [of] steps [that were] wasted (not successful)
+    result["assw"] = pandas.DataFrame(index = poly_degrees)  # [Regardless of solve status,] all solves [total] steps wasted
+    result["sspgs"] = pandas.DataFrame(index = poly_degrees)  # [For] successful(ly) solve(d) [roots, the] percent [of starting] guesses [that were] successful
+    result["ssts"] = pandas.DataFrame(index = poly_degrees)  # [For] successful(ly) solve(d) [roots, the] total steps
+    result["sssnfs"] = pandas.DataFrame(index = poly_degrees)  # [For] successful(ly) solve(d) [roots, the total] steps needed for solving
 
     for epsilon in epsilons:
         overall_percent_failure_to_solve = []
@@ -896,21 +904,19 @@ def static_steps_absolute_error_chart(num_observations , poly_degrees , max_step
     return result_chart
 
 
-def save_dataframes_to_tabs_of_file(df_dict, file_name):
-    writer = pandas.ExcelWriter(file_name , engine = 'xlsxwriter')
+def save_dataframes_to_tabs_of_file(df_dict, file_path):
+    writer = pandas.ExcelWriter(file_path , engine = 'xlsxwriter')
     for sheet, dataframe in df_dict.items():
         dataframe.to_excel(writer, sheet_name = sheet, startrow = 0 , startcol = 0)
     writer.save()
 
 
-sample_size = 1
+sample_size = 125
 poly_degrees = [1 , 2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10]
 epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-9 ]#, 1e-12]
 static_accuracy_results = static_accuracy_chart(sample_size , poly_degrees , epsilons , False)
-# data_static_accuracy_percent_success = static_accuracy_chart(1 , poly_degrees , epsilons , False)
-iter = 0
 
-save_dataframes_to_tabs_of_file(static_accuracy_results, r'/tmp/Math-IA/static_accuracy_class3.xlsx')
+save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/static_accuracy_class6.xlsx')
 # for sheet,df in static_accuracy_results.items():
 #     df.to_excel(r'/temp/Math-IA/static_accuracy_class3.xlsx',  sheet_name = sheet, index = True, header = True)
 #     iter += 1
