@@ -1,6 +1,7 @@
 # imports
 import math
 
+import barcode
 from barcode import *
 import random
 import pandas
@@ -10,6 +11,7 @@ import numpy as np
 from numpy import longdouble
 from math import isclose
 
+import mplcursors
 
 # constants
 BUILD_BINOMIAL_RANGE = 10
@@ -321,7 +323,7 @@ class Polynomial:
                 raise NotPoly
         return rel_maxima , rel_minima
 
-    def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8):
+    def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8, debug=False, minimal_adjustment=None):
         """
         Performs Newton's method for finding roots at a given x-value
 
@@ -337,7 +339,7 @@ class Polynomial:
         current_value = self.evaluate(current_guess)
         guess_history.append(current_guess)
         step_number = 0
-        while not isclose(current_value , 0 , abs_tol = epsilon):
+        while not isclose(current_value , 0 , abs_tol = 1e-12):
             step_number += 1
             if step_number > max_steps:
                 break
@@ -349,19 +351,32 @@ class Polynomial:
                 return CalculatedRoot(current_guess , current_value , step_number , starting_x , guess_history=guess_history, root_was_found = False, failure_reason='zero derivative')
             new_guess = new_guess_poly.poly_roots[0]  # new_guess = x_intercept of tangent line
             if isclose(current_guess, new_guess):
-                return CalculatedRoot(current_guess, current_value, step_number, starting_x,
-                                      guess_history=guess_history, root_was_found=False,
-                                      failure_reason='no progress')
+                if minimal_adjustment is not None:
+                    #force a nudge in the right direction
+                    new_guess = current_guess + math.copysign(minimal_adjustment, new_guess-current_guess)
+                else:
+                    print("Failed to make progress on finding root after {} steps. Search ended at x={:.5e} where y={:.5e}. Last update was {:.5e}".format(
+                        step_number, current_guess, current_value, current_guess-new_guess))
+
+                    return CalculatedRoot(current_guess, current_value, step_number, starting_x,
+                                          guess_history=guess_history, root_was_found=False,
+                                          failure_reason='no progress')
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
             guess_history.append(current_guess)
-            if self.get_degree() == 1 and step_number == 5:
+            if debug or (self.get_degree() == 1 and step_number == 5):
                 # If the degree is 1, it should have converged long before getting to step 5
-                 print("Updating guess for {} time: changed {:e} :: {}({:.5e})={:.5e} notclose[{:e}] used {}({:.5e}) to get to new_guess={:.5e}/new_value={:.5e}"
-                       .format(step_number, current_guess-previous_guess, self, previous_guess, previous_value, epsilon, new_guess_poly.poly_printer(coeff_format = "{}"), previous_guess, current_guess, current_value))
+                 print("Updating guess for {} time: from ({:.5g} , {:.5g}) to ({:.5g} , {:.5g}) [delta_x={:e}] :: was notclose[{:e}]:: poly={} tangent={}"
+                       .format(step_number, previous_guess, previous_value, current_guess, current_value, current_guess-previous_guess, epsilon,  self, new_guess_poly.poly_printer(coeff_format = "{}")))
         if isclose(current_value, 0, abs_tol=epsilon):
+            if debug:
+                print("Found root after {} steps at x={:.5e} where y={:.5e}".format(
+                    step_number, current_guess, current_value))
             return CalculatedRoot(current_guess , current_value , step_number , starting_x, guess_history=guess_history)
         else:
+            if debug:
+                print("Failed to find root after {} steps. Search ended at x={:.5e} where y={:.5e}".format(
+                    step_number, current_guess, current_value))
             return CalculatedRoot(current_guess , current_value , step_number , starting_x , guess_history=guess_history, root_was_found = False, failure_reason='too many steps')
 
     def get_roots(self , max_steps = 20 , epsilon = 1e-8 , starting_guess_count = None ,
@@ -511,6 +526,70 @@ class Polynomial:
                       current_answer.poly_coefficients_list)  # numbers rows of pascal's triangle as degree of poly from a binomial (so [1 2 1] is row 2)
         return current_answer
 
+    def open_barcode_window(self, minimum, maximum, window_width, epsilon=1e-8):
+        """
+
+        :param minimum:
+        :type minimum: float
+        :param maximum:
+        :type maximum: float
+        :param window_width:
+        :param epsilon:
+        :type epsilon: float
+        :return:
+        """
+
+        assert (maximum > minimum)
+        poly_barcode = BarCode("{:s} | Roots @x = {:s}".format(self.poly_printer(), ",".join(
+            ["{:.3f}".format(r) for r in sorted(self.poly_roots)]))
+                               , minimum, maximum, window_width, 200, self.poly_degree + 1)
+        poly_barcode.close_on_click()
+
+        self.fill_barcode(poly_barcode, epsilon)
+        return poly_barcode
+
+    def fill_barcode(self, poly_barcode, epsilon=1e-8):
+        if self.poly_roots is not None:
+            for r in self.poly_roots:
+                poly_barcode.assign_color_number_to_item(r)
+
+        i = 0
+        for x in poly_barcode.get_x_range():
+            i += 1
+            if i % 100 == 0:
+                poly_barcode.draw()
+            root = self.get_newton_root_from_point(starting_x=x, max_steps=128, epsilon=epsilon)
+            print("Newton Result: ", root)
+            if root.root_was_found:
+                # Looking for what color the root bar should be
+                closest_exact_root = self.get_closest_exact_root(root.x_value)
+                poly_barcode.add_bar(x=x, color_item=closest_exact_root, y=root.steps_taken)
+            else:
+                poly_barcode.add_bar(x=x, color=GREY)
+
+        # Draw the actual roots with White lines
+        for r in range(len(self.poly_roots)):
+            poly_barcode.add_bar(x=self.poly_roots[r], color=WHITE, y=None)
+        poly_barcode.draw()
+        print("Done filling barcode")
+
+    def get_closest_exact_root(self, approximate_root):
+        closest_exact_root = None
+        closest_epsilon = None
+        assert self.poly_roots is not None
+
+        for exact_root in self.poly_roots:
+            if isclose(exact_root, approximate_root):
+                return exact_root
+
+            current_epsilon = abs(approximate_root - exact_root)
+            if closest_exact_root is None or closest_epsilon > current_epsilon:
+                closest_exact_root = exact_root
+                closest_epsilon = current_epsilon
+        # print("Closest Epsilon: {:.2e} | Closest Root: {:.2f}".format(closest_epsilon , closest_exact_root))
+
+        return closest_exact_root
+
 
 def build_a_monomial(leading_coefficient , degree):
     """
@@ -604,8 +683,10 @@ def root_rounder(unrounded_poly_roots):
 
 class ZoomPlot():
 
-    def __init__(self, polynomial):
+    def __init__(self, polynomial, color_points_with_newton_root=False):
         self.polynomial = polynomial
+        self.colorize_points_with_newton_root = color_points_with_newton_root
+        self.color_assignments = MappedColorPalette(self.polynomial.poly_roots)
 
         if polynomial.poly_roots is not None:
             sorted_roots = polynomial.poly_roots.copy()
@@ -625,7 +706,7 @@ class ZoomPlot():
 
         self.xpress = self.xmin
         self.xrelease = self.xmax
-        self.resolution = 200
+        self.resolution = 400
         self.maxiters = 30
 
         self.fig.canvas.mpl_connect('button_press_event', self.onpress)
@@ -636,24 +717,60 @@ class ZoomPlot():
         print("Plotting from {:.2f} to {:.2f}".format(self.xmin, self.xmax))
         x = np.linspace(self.xmin, self.xmax, self.resolution)
         y = self.polynomial.evaluate_array(x)
+        if self.colorize_points_with_newton_root:
+            point_colors = []
+            for x_val in x:
+                # This is coloring point. We could also color the background: https://stackoverflow.com/a/9957832
+                newton_result = self.polynomial.get_newton_root_from_point(x_val, max_steps=50)
+                if newton_result.root_was_found:
+                    exact_root = self.polynomial.get_closest_exact_root(newton_result.x_value)
+                    point_colors.append(self.color_assignments.get_color(exact_root))
+                else:
+                    point_colors.append('gray')
+        else:
+            point_colors = 'red'
+
         self.ax.clear()
         self.ax.set_title(self.polynomial.poly_printer())
-        self.ax.plot(x, y, linewidth=2.0)
+        sc=self.ax.scatter(x, y, color=point_colors, s=5)
+        cursor = mplcursors.cursor(sc, hover=True)
+
+        # hovering shows newton information
+        # by default the annotation displays the xy positions
+        @cursor.connect("add")
+        def on_add(sel : mplcursors.Selection):
+            x=sel.target[0]
+            y=sel.target[1]
+            print("MPL Target: ({:.3e},{:.3e})".format(x,y))
+            slope = self.polynomial.poly_primer().evaluate(x)
+            tangent_x_intercept = x - (y/slope)
+            y_value_at_tangent_x_intercept = self.polynomial.evaluate(tangent_x_intercept)
+
+            newton_result = self.polynomial.get_newton_root_from_point(x)
+
+            sel.annotation.set(text="Point ({:.4g} , {:.4g})\nslope={:.3g}\ntangent leads to ({:.4g},{:.4g})\nnewton result: {}". format(
+                x,y,slope, tangent_x_intercept, y_value_at_tangent_x_intercept, newton_result))
+            #sel.annotation.set(text=tt[sel.target.index])
+
+
         self.ax.yaxis.grid(True)
 
         # Find the Zeros in the current view
         zeros_x=[]
         zeros_y=[]
+        zeros_c=[]
         for zero_x in self.polynomial.poly_roots:
             if self.xmin<=zero_x<=self.xmax:
                 zeros_x.append(zero_x)
                 zeros_y.append(0)
+                zeros_c.append(self.color_assignments.get_color(zero_x))
 
         #https://www.adamsmith.haus/python/answers/how-to-plot-points-in-matplotlib-in-python
-        self.ax.scatter(zeros_x, zeros_y)
+        self.ax.scatter(zeros_x, zeros_y, color=zeros_c)
 
         #https://stackoverflow.com/a/43963231
         plt.gcf().canvas.draw_idle()
+
 
     def onpress(self, event):
         if event.button == 3:
@@ -669,15 +786,24 @@ class ZoomPlot():
         if event.button != 1: return
         self.xrelease = event.xdata
 
+        if self.xpress is None or self.xrelease is None:
+            return
+
+        # a single click (no movement) does a newton-root in debug mode
+        # (less than 1/20 of screen)
+        if abs(self.xrelease - self.xpress) < 0.05*(self.xmax - self.xmin):
+            self.polynomial.get_newton_root_from_point(self.xpress, debug=True)
+            return
+
         self.xmin = min(self.xpress, self.xrelease)
         self.xmax = max(self.xpress, self.xrelease)
         self.plot()
 
 
-#plot = ZoomPlot(poly_maker(5))
-#plt.show()
+plot = ZoomPlot(poly_maker(5), color_points_with_newton_root=True)
+plt.show()
 
-#input("Press Enter to continue...")
+input("Press Enter to continue...")
 
 
 def graph(polynomial , x_min = None , x_max = None , x_resolution = 800, y_resolution=500):
@@ -1057,63 +1183,11 @@ print("Zeros at x = ", question_poly[1])
 
 
 # print(poly_printer(poly_power(10, pascal = 0)))
-poly_barcode = None
-
-
-def BarcodePoly(polynomial , minimum , maximum , window_width , epsilon = 1e-8):
-    """
-
-    :param polynomial:
-    :type polynomial: Polynomial
-    :param minimum:
-    :type minimum: float
-    :param maximum:
-    :type maximum: float
-    :param window_width:
-    :param epsilon:
-    :type epsilon: float
-    :return:
-    """
-
-    assert (maximum > minimum)
-
-    global poly_barcode
-    poly_barcode = BarCode("{:s} | Roots @x = {:s}".format(polynomial.poly_printer() , ",".join(["{:.3f}".format(r) for r in sorted(polynomial.poly_roots)]))
-                           , minimum , maximum , window_width , 200 , polynomial.poly_degree + 1)
-    poly_barcode.close_on_click()
-
-    for i in range(len(polynomial.poly_roots)):
-        poly_barcode.assign_color_number_to_item(polynomial.poly_roots[i] , i)
-
-    i = 0
-    for x in poly_barcode.get_x_range():
-        i += 1
-        if i % 100 == 0:
-            poly_barcode.draw()
-        root = polynomial.get_newton_root_from_point(starting_x = x , max_steps = 128 , epsilon = epsilon)
-        print("Newton Result: ", root)
-        if root.root_was_found:
-            # Looking for what color the root bar should be
-            closest_exact_root = None
-            closest_epsilon = None
-            for r in range(len(polynomial.poly_roots)):
-                current_epsilon = abs(root.x_value - polynomial.poly_roots[r])
-                if closest_exact_root is None or closest_epsilon > current_epsilon:
-                    closest_exact_root = polynomial.poly_roots[r]
-                    closest_epsilon = current_epsilon
-            # print("Closest Epsilon: {:.2e} | Closest Root: {:.2f}".format(closest_epsilon , closest_exact_root))
-            poly_barcode.add_bar(x = x , color_item = closest_exact_root , y = root.steps_taken)
-        else:
-            poly_barcode.add_bar(x = x , color = GREY)
-    for r in range(len(polynomial.poly_roots)):
-        poly_barcode.add_bar(x = polynomial.poly_roots[r] , color = WHITE , y = None)
-    poly_barcode.draw()
-    print("Done drawing")
 
 
 special_basin_poly = Polynomial([12 , -11 , -2 , 1] , [4 , 1 , -3])
 input("Press Enter to continue...")
-BarcodePoly(special_basin_poly , -15 , 15 , 1100)
+poly_barcode = BarcodePoly(special_basin_poly , -15 , 15 , 1100)
 poly_barcode.await_click()
 
 
