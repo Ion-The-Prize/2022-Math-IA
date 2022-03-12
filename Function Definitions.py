@@ -345,7 +345,7 @@ class Polynomial:
         current_value = self.evaluate(current_guess)
         guess_history.append(current_guess)
         step_number = 0
-        while not isclose(current_value , 0 , abs_tol = 1e-12):
+        while not isclose(current_value , 0 , abs_tol = epsilon):
             step_number += 1
             if step_number > max_steps:
                 break
@@ -356,9 +356,11 @@ class Polynomial:
             if new_guess_poly.poly_roots is None:
                 return CalculatedRoot(current_guess , current_value , step_number , starting_x , guess_history = guess_history, root_was_found = False, failure_reason='zero derivative')
             new_guess = new_guess_poly.poly_roots[0]  # new_guess = x_intercept of tangent line
+
+            # default isclose value is 1e-9 (a billionth)
             if isclose(current_guess, new_guess):
                 if minimum_adjustment is not None:
-                    #force a nudge in the right direction
+                    # force a nudge in the right direction
                     new_guess = current_guess + math.copysign(minimum_adjustment , new_guess - current_guess)
                 else:
                     print("Failed to make progress on finding root after {} steps. Search ended at x={:.5e} where y={:.5e}. Last update was {:.5e}".format(
@@ -372,9 +374,9 @@ class Polynomial:
             guess_history.append(current_guess)
             if debug or (self.get_degree() == 1 and step_number == 5):
                 # If the degree is 1, it should have converged long before getting to step 5
-                 print("Updating guess for {} time: from ({:.5g} , {:.5g}) to ({:.5g} , {:.5g}) [delta_x={:e}] :: was notclose[{:e}]:: poly={} tangent={}"
-                       .format(step_number, previous_guess, previous_value, current_guess, current_value, current_guess-previous_guess, epsilon,  self, new_guess_poly.poly_printer(coeff_format = "{}")))
-        if isclose(current_value, 0, abs_tol=epsilon):
+                print("Updating guess for {} time: from ({:.5g} , {:.5g}) to ({:.5g} , {:.5g}) [delta_x={:e}] :: was notclose[{:e}]:: poly={} tangent={}"
+                      .format(step_number, previous_guess, previous_value, current_guess, current_value, current_guess-previous_guess, epsilon,  self, new_guess_poly.poly_printer(coeff_format = "{}")))
+        if isclose(current_value, 0, abs_tol = epsilon):
             if debug:
                 print("Found root after {} steps at x={:.5e} where y={:.5e}".format(
                     step_number, current_guess, current_value))
@@ -618,22 +620,25 @@ def randomly_build_a_binomial(rand_lower_bound = -BUILD_BINOMIAL_RANGE , rand_up
 
     :param rand_lower_bound: the lower bound of the coefficients
     :param rand_upper_bound: the upper bound of the coefficients
-    :param only_int_roots: self explanatory; sets a to be 1 or -1
+    :param only_int_roots: self-explanatory; sets a to be 1 or -1
     :type only_int_roots: bool
     :returns: Polynomial of binomial (with root)
     """
-
-    b = random.randrange(rand_lower_bound , rand_upper_bound + 1)
-
+    assert(rand_lower_bound < rand_upper_bound)
+    
+    # note: randrange does not include the upper bound
     if only_int_roots:
-        a = random.choice([1, -1])
+        root = random.randrange(rand_lower_bound , rand_upper_bound + 1)
+        return Polynomial([root , 1] , [root])
     else:
-        a = random.randrange(rand_lower_bound , rand_upper_bound + 1)
-        while a == 0:
-            a = random.randrange(rand_lower_bound , rand_upper_bound + 1)
+        position = random.randrange(rand_lower_bound , rand_upper_bound + 1)
+        numerator = random.randrange(rand_lower_bound , rand_upper_bound + 1)
+        denominator = random.randrange(rand_lower_bound , rand_upper_bound + 1)
+        while denominator == 0:
+            denominator = random.randrange(rand_lower_bound , rand_upper_bound + 1)
 
-    root = Polynomial([b , a]).get_linear_root()
-    return Polynomial([b , a] , [root])
+        root = position + (numerator / denominator)
+        return Polynomial([(-denominator * position) + numerator , denominator] , [root])
 
 
 def make_polynomial_from_coefficients(*coefficients):
