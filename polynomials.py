@@ -53,7 +53,7 @@ class CalculatedRoot:
         if self.root_was_found:
             return "x={:.3f} y={:.3e} {} (#{:d} from {:.3f})".format(
                 self.x_value , self.y_value ,
-                "closest root={:g} err={:g}".format(self.associated_real_root, self.x_error) if self.x_error is not None else "" ,
+                "closest root={:g} err={:g}".format(self.associated_real_root , self.x_error) if self.x_error is not None else "" ,
                 self.steps_taken ,
                 self.starting_guess)
         else:
@@ -334,7 +334,7 @@ class Polynomial:
             elif second_derivative.evaluate(first_derivative_zeros[i]) < 0:
                 rel_minima += [i]
             elif not second_derivative.get_degree():
-                raise NotPoly
+                pass
         return rel_maxima , rel_minima
 
     def get_closest_exact_root(self, approximate_root):
@@ -354,7 +354,7 @@ class Polynomial:
 
         return closest_exact_root
 
-    def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8 , debug = False , minimum_adjustment = None):
+    def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8 , debug = False , minimum_adjustment = None , no_progress_threshold = None , stop_when_no_progress = False):
         """
         Performs Newton's method for finding roots at a given x-value
 
@@ -364,6 +364,11 @@ class Polynomial:
         :param debug: whether debug strings will be printed
         :param minimum_adjustment: If a value is given, this will be the minimum delta x-value for each step
         :type minimum_adjustment: float
+        :param no_progress_threshold: the delta-x between steps that is considered no progress.
+        :type no_progress_threshold: float
+        :param stop_when_no_progress: if False (default), the first step at which delta-x between steps is less than
+            no_progress_threshold will be recorded but no action taken. If True, then the root will be returned failed
+            because of CalculatedRoot.FAILURES.NO_PROGRESS when delta-x is less than no_progress_threshold
         :return: CalculatedRoot
         """
 
@@ -386,7 +391,7 @@ class Polynomial:
             new_guess = new_guess_tangent.poly_roots[0]  # new_guess = x_intercept of tangent line
 
             # default isclose value is 1e-9 (a billionth)
-            if isclose(current_guess, new_guess , rel_tol = 1e-12):
+            if isclose(current_guess, new_guess , rel_tol = no_progress_threshold):
                 if minimum_adjustment is not None:
                     # force a nudge in the right direction
                     new_guess = current_guess + math.copysign(minimum_adjustment , new_guess - current_guess)
