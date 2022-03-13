@@ -11,6 +11,7 @@ import numpy as np
 from numpy import longdouble
 from math import isclose
 from enum import Enum
+from styleframe import StyleFrame, Styler, utils
 
 import mplcursors
 
@@ -68,7 +69,7 @@ class StatsAccumulator:
         dataframe["{} {}".format(self.name , "max")] = self.column_data_max
 
 
-def get_data_of_poly_roots_static_accuracy(num_observations = None , poly_degree = None , epsilon = None , only_int_roots = False , human_dividng = False):
+def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon = None , max_attempts_before_quitting = 100 , human_dividng = False):
     result_total_steps_when_completely_successful = []
     result_total_steps_successful_guess_when_completely_successful = []
     result_percent_guesses_successful_when_completely_successful = []
@@ -77,7 +78,8 @@ def get_data_of_poly_roots_static_accuracy(num_observations = None , poly_degree
     hit_steps_limit_fail_count = 0
     zero_derivative_fail_count = 0
     no_progress_fail_count = 0
-    for i in range(num_observations):
+    problematic_poly_count = 0
+    for i in range(len(testing_polynomials)):
         """
         # For testing when speed is important (so low sample sizes will not throw errors about arrays being empty)
         solved_completely = False
@@ -85,8 +87,9 @@ def get_data_of_poly_roots_static_accuracy(num_observations = None , poly_degree
             polynomial = poly_maker(poly_degree, only_int_roots=only_int_roots)
             solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
         """
-        polynomial = poly_maker(degree = poly_degree , only_int_roots = only_int_roots)
-        solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False , human_dividing = False)
+        polynomial = testing_polynomials[i]  # necessary to retry polynomials
+        solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , max_attempts_before_quitting = max_attempts_before_quitting , sort_roots = False , human_dividing = human_dividng)
+        times_failed_single_poly = 0
 
         for failed_root in fail_roots:
             if failed_root.failure_reason == CalculatedRoot.FAILURES.HORIZONTAL:
@@ -109,47 +112,58 @@ def get_data_of_poly_roots_static_accuracy(num_observations = None , poly_degree
             result_wasted_steps.append(int(np.sum([r.steps_taken for r in poly_roots])) + int(np.sum([r.steps_taken for r in fail_roots])))
             complete_fail_count += 1
             i -= 1  # retry this polynomial because it didn't work
+            times_failed_single_poly += 1
+            if times_failed_single_poly > 1:
+                i += 1
+                problematic_poly_count += 1
+                print("PROBLEMATIC POLYNOMIAL: {}".format(polynomial))
     percent_steps_wasted = int(np.sum(result_wasted_steps)) / (int(np.sum(result_total_steps_successful_guess_when_completely_successful)) + int(np.sum(result_wasted_steps)))
 
-    return num_observations , complete_fail_count , hit_steps_limit_fail_count , zero_derivative_fail_count , no_progress_fail_count , result_wasted_steps , percent_steps_wasted , result_total_steps_when_completely_successful , result_total_steps_successful_guess_when_completely_successful , result_percent_guesses_successful_when_completely_successful
+    return len(testing_polynomials) , complete_fail_count , hit_steps_limit_fail_count , zero_derivative_fail_count , no_progress_fail_count , problematic_poly_count , result_wasted_steps , percent_steps_wasted , result_total_steps_when_completely_successful , result_total_steps_successful_guess_when_completely_successful , result_percent_guesses_successful_when_completely_successful
 
 
-def get_data_of_poly_roots_static_speed(num_observations = None , poly_degree = None , steps_taken = None , only_int_roots = False):
-    result_x_error_magnitude = []
-    result_y_error_magnitude = []
+def get_data_of_poly_roots_static_speed(testing_polynomials = None , steps_taken = None):
+    ZERO_ERROR_MAGNITUDE = -16  # For when the x- or y-errors are 0 (it's on the root)
+    result_x_precision = []
+    result_y_precision = []
     no_progress_fail_count = 0
     zero_derivative_fail_count = 0
-    for i in range(num_observations):
-        polynomial = poly_maker(degree = poly_degree , only_int_roots = only_int_roots)
+    first_step_without_progress = []
+    for polynomial in testing_polynomials:
         guess = (-BUILD_BINOMIAL_RANGE - 1) + (BUILD_BINOMIAL_RANGE + 2) * random.random()
         poly_root = polynomial.get_newton_root_from_point(starting_x = guess , max_steps = steps_taken , epsilon = 1e-400 , debug = False)
         poly_root.associate_with_real_root(polynomial.get_closest_exact_root(poly_root.x_value))
 
         if poly_root.root_was_found:
             print("FOUND - {}".format(poly_root))
-            x_error_magnitude = math.log10(poly_root.x_error) if poly_root.x_error != 0 else -9
-            y_error_magnitude = math.log10(poly_root.y_error) if poly_root.y_error != 0 else -9
+            x_error_magnitude = math.log10(poly_root.x_error) if poly_root.x_error != 0 else ZERO_ERROR_MAGNITUDE
+            y_error_magnitude = math.log10(poly_root.y_error) if poly_root.y_error != 0 else ZERO_ERROR_MAGNITUDE
 
-            result_x_error_magnitude.append(x_error_magnitude)
-            result_y_error_magnitude.append(y_error_magnitude)
+            result_x_precision.append(-x_error_magnitude)
+            result_y_precision.append(-y_error_magnitude)
         if poly_root.failure_reason == CalculatedRoot.FAILURES.HORIZONTAL:
             zero_derivative_fail_count += 1
         elif poly_root.failure_reason == CalculatedRoot.FAILURES.NO_PROGRESS:
             no_progress_fail_count += 1
         elif poly_root.failure_reason == CalculatedRoot.FAILURES.HIT_STEP_LIMIT:
-            x_error_magnitude = math.log10(poly_root.x_error) if poly_root.x_error != 0 else -9
-            y_error_magnitude = math.log10(poly_root.y_error) if poly_root.y_error != 0 else -9
+            x_error_magnitude = math.log10(poly_root.x_error) if poly_root.x_error != 0 else ZERO_ERROR_MAGNITUDE
+            y_error_magnitude = math.log10(poly_root.y_error) if poly_root.y_error != 0 else ZERO_ERROR_MAGNITUDE
 
-            result_x_error_magnitude.append(x_error_magnitude)
-            result_y_error_magnitude.append(y_error_magnitude)
-    return num_observations , no_progress_fail_count , zero_derivative_fail_count , result_x_error_magnitude , result_y_error_magnitude
+            result_x_precision.append(-x_error_magnitude)
+            result_y_precision.append(-y_error_magnitude)
+        if poly_root.first_step_with_no_progress is not None:
+            first_step_without_progress.append(poly_root.first_step_with_no_progress)
+    if len(first_step_without_progress) == 0:
+        first_step_without_progress = [-1]
+    return len(testing_polynomials) , no_progress_fail_count , zero_derivative_fail_count , result_x_precision , result_y_precision , first_step_without_progress
 
 
-def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilons = None , only_int_roots = True , human_dividing = False):
+def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilons = None , max_attempts_before_quitting = 100 , only_int_roots = True , human_dividing = False):
     """
     :type num_observations: int
     :type poly_degrees: list[int]
     :type epsilons: list[float]
+    :param max_attempts_before_quitting: maximum attempts before quitting
     :param only_int_roots: whether tested polynomials will have integer roots
     :type only_int_roots: bool
     :param human_dividing: whether Newton's method will factor out the actual roots if sufficiently close
@@ -162,6 +176,7 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
     result = dict()
     result["opfts"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [that] failed to solve
     result["opsw"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [of] steps [that were] wasted (not successful)
+    result["oppp"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [of] polynomials [that were] problematic
     result["opfrfsl"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [of] failed roots [that] failed [because of hitting] step limit
     result["opfrfzd"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [of] failed roots [that] failed [because of] zero derivative
     result["opfrfnp"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [of] failed roots [that] failed [because of] no progress
@@ -170,9 +185,16 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
     result["ssts"] = pandas.DataFrame(index = poly_degrees)  # [For] successful(ly) solve(d) [roots, the] total steps
     result["sssnfs"] = pandas.DataFrame(index = poly_degrees)  # [For] successful(ly) solve(d) [roots, the total] steps needed for solving
 
+    testing_polynomials = dict()
+    for degree in poly_degrees:
+        testing_polynomials[degree] = []
+        for i in range(num_observations):
+            testing_polynomials[degree].append(poly_maker(degree , only_int_roots = only_int_roots))
+
     for epsilon in epsilons:
         overall_percent_failure_to_solve = []
         overall_percent_steps_wasted = []
+        overall_percent_polys_problematic = []
         overall_percent_fails_hit_steps_limit = []
         overall_percent_fails_zero_derivative = []
         overall_percent_fails_no_progress = []
@@ -183,23 +205,22 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
         for degree in poly_degrees:
             print("Working on x^{:d} polynomials with epsilon {:e}".format(degree, epsilon))
             num_samples , complete_fail_count , hit_steps_limit_fail_count , zero_derivative_fail_count ,\
-                no_progress_fail_count , wasted_steps , percent_steps_wasted , \
+                no_progress_fail_count , problem_poly_count , wasted_steps , percent_steps_wasted , \
                 tot_steps_when_completely_successful , \
                 tot_steps_successful_guess_when_completely_successful , \
                 percent_guesses_successful_when_completely_successful = \
-                get_data_of_poly_roots_static_accuracy(num_observations = num_observations ,
-                                                       poly_degree = degree ,
-                                                       epsilon = epsilon ,
-                                                       only_int_roots = only_int_roots)
+                get_data_of_poly_roots_static_accuracy(testing_polynomials = testing_polynomials[degree] ,
+                                                       epsilon = epsilon)
             overall_percent_failure_to_solve.append(complete_fail_count / num_samples)
             overall_percent_steps_wasted.append(percent_steps_wasted)
+            overall_percent_polys_problematic.append(problem_poly_count / num_samples)
 
-            total_failed_roots = hit_steps_limit_fail_count + zero_derivative_fail_count + no_progress_fail_count
-            if total_failed_roots == 0:
-                total_failed_roots = 1  # It is the denominator so it being 0 will cause problems and it being 1 won't change anything
-            overall_percent_fails_hit_steps_limit.append(hit_steps_limit_fail_count / total_failed_roots)
-            overall_percent_fails_zero_derivative.append(zero_derivative_fail_count / total_failed_roots)
-            overall_percent_fails_no_progress.append(no_progress_fail_count / total_failed_roots)
+            total_number_failed_roots = hit_steps_limit_fail_count + zero_derivative_fail_count + no_progress_fail_count
+            if total_number_failed_roots == 0:
+                total_number_failed_roots = 1  # It is the denominator so it being 0 will cause problems and it being 1 won't change anything
+            overall_percent_fails_hit_steps_limit.append(hit_steps_limit_fail_count / total_number_failed_roots)
+            overall_percent_fails_zero_derivative.append(zero_derivative_fail_count / total_number_failed_roots)
+            overall_percent_fails_no_progress.append(no_progress_fail_count / total_number_failed_roots)
 
             accumulator_all_solves_steps_wasted.append_data(wasted_steps)
             accumulator_successful_solves_percent_guesses_successful.append_data(percent_guesses_successful_when_completely_successful)
@@ -207,6 +228,7 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
             accumulator_successful_solves_steps_needed_for_successes.append_data(tot_steps_successful_guess_when_completely_successful)
         result["opfts"]["{:.1e}".format(epsilon)] = overall_percent_failure_to_solve
         result["opsw"]["{:.1e}".format(epsilon)] = overall_percent_steps_wasted
+        result["oppp"]["{:.1e}".format(epsilon)] = overall_percent_polys_problematic
 
         result["opfrfsl"]["{:.1e}".format(epsilon)] = overall_percent_fails_hit_steps_limit
         result["opfrfzd"]["{:.1e}".format(epsilon)] = overall_percent_fails_zero_derivative
@@ -236,61 +258,101 @@ def static_speed_chart(num_observations = None, poly_degrees = None , max_steps 
     result = dict()
     result["opfcnp"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [that] failed [to] converge [because] no progress
     result["opfcsz"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [that] failed [to] converge [because] slope zero
-    result["x-error"] = pandas.DataFrame(index = poly_degrees)  # [Regardless of solve status,] all solves [total] steps wasted
-    result["y-error"] = pandas.DataFrame(index = poly_degrees)  # [For] successful(ly) solve(d) [roots, the] percent [of starting] guesses [that were] successful
+    result["x-error"] = pandas.DataFrame(index = poly_degrees)  # After reaching the step limit, the negative of the magnitude of the x-error (difference between approximation and nearest root)
+    result["y-error"] = pandas.DataFrame(index = poly_degrees)  # After reaching the step limit, the negative of the magnitude of the y-error (difference between approximation and nearest root)
+    result["fsnp"] = pandas.DataFrame(index = poly_degrees)  # [The] first step [where] no progress [started] being made
+
+    testing_polynomials = dict()
+    for degree in poly_degrees:
+        testing_polynomials[degree] = []
+        for i in range(num_observations):
+            testing_polynomials[degree].append(poly_maker(degree, only_int_roots = only_int_roots))
 
     for max_step in max_steps:
         overall_percent_failed_no_progress = []
         overall_percent_failed_slope_zero = []
-        accumulator_x_error_magnitude = StatsAccumulator("{}".format(max_step))
-        accumulator_y_error_magnitude = StatsAccumulator("{}".format(max_step))
+        accumulator_x_precision = StatsAccumulator("{} steps,".format(max_step))
+        accumulator_y_precision = StatsAccumulator("{} steps,".format(max_step))
+        accumulator_first_step_without_progress = StatsAccumulator("{} steps,".format(max_step))
         for degree in poly_degrees:
             print("Working on x^{:d} polynomials with {:d} max steps".format(degree, max_step))
-            num_samples , no_progress_fail_count , horizontal_fail_count , x_error_magnitude , \
-                y_error_magnitude = get_data_of_poly_roots_static_speed(num_observations = num_observations ,
-                                                                                    poly_degree = degree ,
-                                                                                    steps_taken = max_step ,
-                                                                                    only_int_roots = only_int_roots)
+            num_samples , no_progress_fail_count , horizontal_fail_count , x_error_precision , y_error_precision , \
+                first_step_without_progress = get_data_of_poly_roots_static_speed(testing_polynomials = testing_polynomials[degree],
+                                                                                  steps_taken = max_step)
             total_fail_count = no_progress_fail_count + horizontal_fail_count
             if total_fail_count == 0:
                 total_fail_count = 1  # It is the denominator so it being 0 will cause problems and it being 1 won't change anything
             overall_percent_failed_no_progress.append(no_progress_fail_count / total_fail_count)
             overall_percent_failed_slope_zero.append(horizontal_fail_count / total_fail_count)
 
-            if len(x_error_magnitude) == 0:
+            if len(x_error_precision) == 0:
                 print("No x-errors")
-            accumulator_x_error_magnitude.append_data(x_error_magnitude)
-            accumulator_y_error_magnitude.append_data(y_error_magnitude)
+            accumulator_x_precision.append_data(x_error_precision)
+            accumulator_y_precision.append_data(y_error_precision)
+            accumulator_first_step_without_progress.append_data(first_step_without_progress)
         result["opfcnp"]["{:d}".format(max_step)] = overall_percent_failed_no_progress
         result["opfcsz"]["{:d}".format(max_step)] = overall_percent_failed_slope_zero
-        accumulator_x_error_magnitude.add_to_dataframe(result["x-error"])
-        accumulator_y_error_magnitude.add_to_dataframe(result["y-error"])
+        accumulator_x_precision.add_to_dataframe(result["x-error"])
+        accumulator_y_precision.add_to_dataframe(result["y-error"])
+        accumulator_first_step_without_progress.add_to_dataframe(result["fsnp"])
     return result
 
 
-def save_dataframes_to_tabs_of_file(df_dict, file_path):
+def order_dataframe_columns_in_subcolumn_order(dataframe , subcolumn_suffix_order , column_separations = False , row_title = "Degrees"):
+    original_dataframe_column_names = dataframe.columns.tolist()
+
+    if column_separations:
+        original_dataframe_index = dataframe.index.tolist()
+        blank_column = [None] * len(original_dataframe_index)
+        dataframe["BLANK"] = blank_column
+        dataframe["{}".format(row_title)] = original_dataframe_index
+
+    resulting_column_order = []
+    for suffix in subcolumn_suffix_order:
+        for df_column in original_dataframe_column_names:
+            if df_column.endswith(suffix):
+                resulting_column_order.append(df_column)
+        if column_separations:
+            resulting_column_order.append("BLANK")
+            resulting_column_order.append("{}".format(row_title))
+    return dataframe[resulting_column_order]
+
+
+def save_dataframes_to_tabs_of_file(df_dict, file_path, subcolumn_suffix_order = None):
     writer = pandas.ExcelWriter(file_path , engine = 'xlsxwriter')
     for sheet, dataframe in df_dict.items():
+        if subcolumn_suffix_order is not None:
+            if not sheet.startswith("o"):
+                # Can't sort the "overall" entries... really janky monkeypatch, but it wooorks
+                dataframe = order_dataframe_columns_in_subcolumn_order(dataframe , subcolumn_suffix_order , column_separations = True)
         dataframe.to_excel(writer, sheet_name = sheet, startrow = 0 , startcol = 0)
     writer.save()
 
 
-sample_size = 64
+sample_size = 16
 poly_degrees = [2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10]
 epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-9 ]#, 1e-12]
 max_steps_list = [3 , 4 , 5 , 6 , 7 , 8 , 16 , 32 , 64 , 128 , 256 , 512 , 1024 , 2048 , 4096]
 
 static_speed_results = static_speed_chart(num_observations = sample_size , poly_degrees = poly_degrees , max_steps = max_steps_list , only_int_roots = False , human_dividing = False)
-save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/new_static_speed_chart2.xlsx')
+save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/new_static_speed_chart8.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
 input("Press Enter to continue...")
 static_accuracy_results = static_accuracy_chart(num_observations = sample_size , poly_degrees = poly_degrees , epsilons = epsilons , only_int_roots = False , human_dividing = False)
-save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/new_static_accuracy_chart2.xlsx')
+save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/new_static_accuracy_chart8.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
 
 # print(get_data_of_poly_roots_static_speed(500 , 10 , 32))
 shame = Polynomial([476280.00000361796 , 1905120.0])
 print(shame.get_newton_root_from_point(1))
 
-
+"""
+sf = StyleFrame(dataframe)
+        sf.apply_column_style(cols_to_style = dataframe.columns ,
+                              styler_obj = Styler(bg_color = utils.colors.white , bold = True ,
+                                                  font = utils.fonts.calibri , font_size = 12) , style_header = True)
+        sf.apply_headers_style(styler_obj = Styler(bg_color = utils.colors.grey , bold = True , font_size = 11 ,
+                                                   font_color = utils.colors.black ,
+                                                   number_format = utils.number_formats.general , protection = False))
+"""
 """
 my_list = [0]
 adding_list = [1 , 1]
@@ -408,7 +470,7 @@ print(new_poly.poly_printer())
 print()
 print("Poly Coeff: ", new_poly.poly_coefficients_list)
 print("Real Roots: ", new_poly.poly_roots)
-solved_completely , calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_steps_before_quitting = 50 , epsilon = 1e-9)
+solved_completely , calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_attempts_before_quitting = 50 , epsilon = 1e-9)
 print("Calc Roots: ", [root.x_value for root in calc_roots])
 print("Round Root: ", [root.x_value for root in root_rounder(calc_roots)])
 print("Root Steps: ", [root.steps_taken for root in calc_roots])
