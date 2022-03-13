@@ -487,8 +487,8 @@ class Polynomial:
             poly_roots.sort()
         return poly_roots , failed_roots
 
-    def get_roots_with_dividing(self , max_steps_per_root = 20 , max_steps_before_quitting = None, epsilon = 1e-10 , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
-                  guess_range_max = BUILD_BINOMIAL_RANGE + 1, sort_roots = False , human_dividing = False):
+    def get_roots_with_dividing(self , max_steps_per_root = 20 , max_attempts_before_quitting = 100 , epsilon = 1e-10 , guess_range_min = -BUILD_BINOMIAL_RANGE - 1 ,
+                                guess_range_max = BUILD_BINOMIAL_RANGE + 1 , sort_roots = False , human_dividing = False):
         """
         Uses Newton's method for finding roots of higher order polynomials. After finding a root, it is factored out
             of the polynomial, resulting in all the actual roots with no extra repeats
@@ -496,9 +496,9 @@ class Polynomial:
 
         :param max_steps_per_root: the number of tangent lines used (default 20)
         :type max_steps_per_root: int
-        :param max_steps_before_quitting: the number of times it should loop without finding a root with y below epsilon
-            before giving up, defaults to degree^2. If 0, will keep trying until a root below epsilon is found
-        :type max_steps_before_quitting: int
+        :param max_attempts_before_quitting: the number of times it should loop without finding a root with y below epsilon
+            before giving up, defaults to 100. If 0, will keep trying until a root below epsilon is found
+        :type max_attempts_before_quitting: int
         :param epsilon: really small value, only roots with y values below epsilon will be counted as actual roots. If 0, will go up until max_steps_per_root
         :type epsilon: float
         :param guess_range_min: interval of guessing ("root range") minimum
@@ -511,15 +511,12 @@ class Polynomial:
         :return: triple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)] , list[Polynomial (remainders)]]
         """
 
-        if max_steps_before_quitting is None:
-            max_steps_before_quitting = self.poly_degree ** 2
-
         real_roots_left = self.poly_roots
         poly_roots = []
         failed_roots = []
         remainders = []
         factored_poly = self
-        loops = 0
+        attempts = 0
         while factored_poly.poly_degree > 0:
             guess = guess_range_min + (guess_range_max - guess_range_min) * random.random()
             newton_result = factored_poly.get_newton_root_from_point(guess , max_steps_per_root , epsilon)
@@ -544,14 +541,14 @@ class Polynomial:
                 # print("Remainder:     " , factor_remainder.poly_printer())
                 poly_roots.append(newton_result)
                 remainders.append(factor_remainder)  # store remainder
-                loops = 0
+                attempts = 0
             else:
                 failed_roots += [newton_result]
-                loops += 1
-            if loops >= max_steps_before_quitting != 0:
+                attempts += 1
+            if attempts >= max_attempts_before_quitting != 0:
                 print("{}Could not find factorable root within {:.1e} after trying {} times. {}".format(
                      "LINEAR!!" if factored_poly.get_degree() == 1 else "",
-                     epsilon , loops , factored_poly.poly_printer(coeff_format="{}")))
+                     epsilon , attempts , factored_poly.poly_printer(coeff_format="{}")))
                 print("  Original poly: {}. All roots: {}".format(self, self.poly_roots))
                 print("  Roots found so far: {}".format(" || ".join(str(r) for r in poly_roots)))
                 print("  Failed root[0]: ", failed_roots[0])
