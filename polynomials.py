@@ -37,7 +37,7 @@ class CalculatedRoot:
         NO_PROGRESS = 1
         HIT_STEP_LIMIT = 2
 
-    def __init__(self , x_value , y_value , steps_taken , starting_guess , guess_history = None, root_was_found = True, failure_reason = None):
+    def __init__(self , x_value , y_value , steps_taken , starting_guess , guess_history = None, root_was_found = True, failure_reason = None , first_step_with_no_progress = None):
         self.x_value = x_value
         self.y_value = y_value
         self.steps_taken = steps_taken
@@ -48,6 +48,7 @@ class CalculatedRoot:
         self.associated_real_root = None
         self.x_error = None
         self.y_error = math.fabs(y_value)
+        self.first_step_with_no_progress = first_step_with_no_progress
 
     def __repr__(self):
         if self.root_was_found:
@@ -105,10 +106,10 @@ class Polynomial:
         :return: string of math language polynomial
         """
 
-        note=""
+        note = ""
         if self.get_degree() == 2:
-            b2_4ac = math.pow(self.poly_coefficients_list[1] , 2) - 4 * self.poly_coefficients_list[2] * self.poly_coefficients_list[0]
-            if b2_4ac < 0:
+            discriminant = math.pow(self.poly_coefficients_list[1] , 2) - 4 * self.poly_coefficients_list[2] * self.poly_coefficients_list[0]
+            if discriminant < 0:
                 note = " [imaginary]"
 
         result = ""
@@ -246,7 +247,7 @@ class Polynomial:
             remainder_polynomial = remainder_polynomial.subtract(poly_to_subtract)
         return result , remainder_polynomial
 
-    def evaluate(self , x ):
+    def evaluate(self , x):
         """
         Given an x value, computes y value of self
 
@@ -263,7 +264,7 @@ class Polynomial:
         return result
 
     def evaluate_array(self, x):
-        y = np.empty(shape=(len(x), 1), dtype=float)
+        y = np.empty(shape = (len(x), 1), dtype = float)
         for i in range(len(x)):
             y[i] = self.evaluate(x[i])
 
@@ -354,7 +355,7 @@ class Polynomial:
 
         return closest_exact_root
 
-    def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8 , debug = False , minimum_adjustment = None , no_progress_threshold = None , stop_when_no_progress = False):
+    def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8 , debug = False , minimum_adjustment = None , no_progress_threshold = 1e-12 , stop_when_no_progress = False):
         """
         Performs Newton's method for finding roots at a given x-value
 
@@ -378,6 +379,8 @@ class Polynomial:
         current_value = self.evaluate(current_guess)
         guess_history.append(current_guess)
         step_number = 0
+        first_step_with_no_progress = None
+        steps_without_progress = 0
         while not isclose(current_value , 0 , rel_tol = epsilon , abs_tol = epsilon):
             step_number += 1
             if step_number > max_steps:
@@ -387,7 +390,10 @@ class Polynomial:
 
             new_guess_tangent = self.get_tangent_line(current_guess)
             if new_guess_tangent.poly_roots is None:
-                return CalculatedRoot(current_guess , current_value , step_number , starting_x , guess_history = guess_history, root_was_found = False, failure_reason = CalculatedRoot.FAILURES.HORIZONTAL)
+                return CalculatedRoot(current_guess, current_value, step_number, starting_x,
+                                      guess_history = guess_history, root_was_found = False,
+                                      failure_reason = CalculatedRoot.FAILURES.HORIZONTAL,
+                                      first_step_with_no_progress = first_step_with_no_progress)
             new_guess = new_guess_tangent.poly_roots[0]  # new_guess = x_intercept of tangent line
 
             # default isclose value is 1e-9 (a billionth)
@@ -396,12 +402,19 @@ class Polynomial:
                     # force a nudge in the right direction
                     new_guess = current_guess + math.copysign(minimum_adjustment , new_guess - current_guess)
                 else:
-                    print("Failed to make progress on finding root after {} steps. Search ended at x={:.5e} where y={:.5e}. Last update was {:.5e}".format(
-                        step_number, current_guess, current_value, current_guess-new_guess))
-
-                    return CalculatedRoot(current_guess, current_value, step_number, starting_x,
-                                          guess_history = guess_history, root_was_found = False,
-                                          failure_reason = CalculatedRoot.FAILURES.NO_PROGRESS)
+                    if first_step_with_no_progress is None:
+                        print(
+                            "Failed to make progress on finding root after {} steps at x={:.5e} where y={:.5e}. Last update was {:.5e}. Poly: {}".format(
+                                step_number , current_guess , current_value , current_guess - new_guess , self))
+                        first_step_with_no_progress = step_number
+                    else:
+                        steps_without_progress += 1
+                    if stop_when_no_progress:
+                        print("Search ended.")
+                        return CalculatedRoot(current_guess, current_value, step_number, starting_x,
+                                              guess_history = guess_history, root_was_found = False,
+                                              failure_reason = CalculatedRoot.FAILURES.NO_PROGRESS,
+                                              first_step_with_no_progress = first_step_with_no_progress)
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
             guess_history.append(current_guess)
@@ -412,14 +425,19 @@ class Polynomial:
                       .format(step_number, previous_guess, previous_value, current_guess, current_value, current_guess-previous_guess, epsilon,  self, new_guess_tangent.poly_printer(coeff_format = "{}")))
         if isclose(current_value, 0, abs_tol = epsilon):
             if debug:
-                print("Found root after {} steps at x={:.5e} where y={:.5e}".format(
-                    step_number, current_guess, current_value))
-            return CalculatedRoot(current_guess , current_value , step_number , starting_x, guess_history = guess_history)
+                print("Found root after {} steps at x={:.5e} where y={:.5e}. Poly: {}".format(
+                    step_number, current_guess, current_value, self))
+            return CalculatedRoot(current_guess , current_value , step_number , starting_x,
+                                  guess_history = guess_history,
+                                  first_step_with_no_progress = first_step_with_no_progress)
         else:
             if debug:
-                print("Failed to find root after {} steps. Search ended at x={:.5e} where y={:.5e}".format(
-                    step_number, current_guess, current_value))
-            return CalculatedRoot(current_guess , current_value , step_number , starting_x , guess_history = guess_history, root_was_found = False, failure_reason = CalculatedRoot.FAILURES.HIT_STEP_LIMIT)
+                print("Failed to find root after {} steps. Search ended at x={:.5e} where y={:.5e}. Poly: {}".format(
+                    step_number, current_guess, current_value, self))
+            return CalculatedRoot(current_guess , current_value , step_number , starting_x ,
+                                  guess_history = guess_history , root_was_found = False ,
+                                  failure_reason = CalculatedRoot.FAILURES.HIT_STEP_LIMIT,
+                                  first_step_with_no_progress = first_step_with_no_progress)
 
     def get_roots(self , max_steps = 20 , epsilon = 1e-8 , starting_guess_count = None ,
                   random_starting_guesses = True , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
