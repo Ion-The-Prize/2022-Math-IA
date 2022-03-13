@@ -655,7 +655,8 @@ def randomly_build_a_binomial(rand_lower_bound = -BUILD_BINOMIAL_RANGE , rand_up
             denominator = random.randrange(rand_lower_bound , rand_upper_bound + 1)
 
         root = position + (numerator / denominator)
-        return Polynomial([(-denominator * position) + numerator , denominator] , [root])
+        result = Polynomial([(-root * denominator) , denominator] , [root])
+        return result
 
 
 def make_polynomial_from_coefficients(*coefficients):
