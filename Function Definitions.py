@@ -80,6 +80,7 @@ def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon 
     no_progress_fail_count = 0
     problematic_poly_count = 0
     interesting_polynomials = []
+    times_failed_single_poly = 0
     for i in range(len(testing_polynomials)):
         """
         # For testing when speed is important (so low sample sizes will not throw errors about arrays being empty)
@@ -89,11 +90,10 @@ def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon 
             solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
         """
         polynomial = testing_polynomials[i]  # "for polynomial in testing_polynomials" is not done so polynomials can be retried
-        solved_completely , poly_roots , fail_roots , \
-            remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon ,
+        solved_completely , calculated_poly_roots_set , fail_roots , \
+            remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 256 , epsilon = epsilon ,
                                                             max_attempts_before_quitting = max_attempts_before_quitting,
                                                             human_dividing = human_dividng , debug = debug)
-        times_failed_single_poly = 0
 
         for failed_root in fail_roots:
             if failed_root.failure_reason == CalculatedRoot.FAILURES.HORIZONTAL:
@@ -104,16 +104,16 @@ def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon 
                 hit_steps_limit_fail_count += 1
 
         if solved_completely:
-            total_steps = int(np.sum([r.steps_taken for r in poly_roots])) + int(np.sum([r.steps_taken for r in fail_roots]))
-            total_steps_successful_guesses = int(np.sum([r.steps_taken for r in poly_roots]))
-            percent_guesses_successful = len(poly_roots) / (len(poly_roots) + len(fail_roots))
+            total_steps = int(np.sum([r.steps_taken for r in calculated_poly_roots_set])) + int(np.sum([r.steps_taken for r in fail_roots]))
+            total_steps_successful_guesses = int(np.sum([r.steps_taken for r in calculated_poly_roots_set]))
+            percent_guesses_successful = len(calculated_poly_roots_set) / (len(calculated_poly_roots_set) + len(fail_roots))
             result_wasted_steps.append(int(np.sum([r.steps_taken for r in fail_roots])))
 
             result_total_steps_when_completely_successful.append(total_steps)
             result_total_steps_successful_guess_when_completely_successful.append(total_steps_successful_guesses)
             result_percent_guesses_successful_when_completely_successful.append(percent_guesses_successful)
         else:
-            result_wasted_steps.append(int(np.sum([r.steps_taken for r in poly_roots])) + int(np.sum([r.steps_taken for r in fail_roots])))
+            result_wasted_steps.append(int(np.sum([r.steps_taken for r in calculated_poly_roots_set])) + int(np.sum([r.steps_taken for r in fail_roots])))
             complete_fail_count += 1
             i -= 1  # retry this polynomial because it didn't work
             times_failed_single_poly += 1
@@ -123,6 +123,7 @@ def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon 
                 print("PROBLEMATIC POLYNOMIAL: {}".format(polynomial))
                 polynomial.save_polynomial("Problem Child")
                 interesting_polynomials.append(polynomial)
+                times_failed_single_poly = 0
     percent_steps_wasted = int(np.sum(result_wasted_steps)) / (int(np.sum(result_total_steps_successful_guess_when_completely_successful)) + int(np.sum(result_wasted_steps)))
 
     return len(testing_polynomials) , complete_fail_count , hit_steps_limit_fail_count , zero_derivative_fail_count , no_progress_fail_count , problematic_poly_count , result_wasted_steps , percent_steps_wasted , result_total_steps_when_completely_successful , result_total_steps_successful_guess_when_completely_successful , result_percent_guesses_successful_when_completely_successful , interesting_polynomials
@@ -216,11 +217,16 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
 
     testing_polynomials = dict()
     sample_polynomials = []
+    degree_pos = 0
     for degree in poly_degrees:
         testing_polynomials[degree] = []
         for i in range(num_observations):
             testing_polynomials[degree].append(poly_maker(degree , only_int_roots = only_int_roots))
         sample_polynomials += testing_polynomials[degree][0:9]
+        if debug:
+            print(degree)
+            print(testing_polynomials[degree][degree_pos:9*(degree_pos+1)])
+        degree_pos += 1
 
     saved_polynomials = []
     for epsilon in epsilons:
@@ -236,7 +242,6 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
         accumulator_successful_solves_steps_needed_for_successes = StatsAccumulator("{:.1e}".format(epsilon))
         for degree in poly_degrees:
             print("Working on x^{:d} polynomials with epsilon {:e}".format(degree, epsilon))
-
             num_samples , complete_fail_count , hit_steps_limit_fail_count , zero_derivative_fail_count ,\
                 no_progress_fail_count , problem_poly_count , wasted_steps , percent_steps_wasted , \
                 tot_steps_when_completely_successful , \
@@ -263,8 +268,6 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
             accumulator_successful_solves_percent_guesses_successful.append_data(percent_guesses_successful_when_completely_successful)
             accumulator_successful_solves_total_steps.append_data(tot_steps_when_completely_successful)
             accumulator_successful_solves_steps_needed_for_successes.append_data(tot_steps_successful_guess_when_completely_successful)
-        result["polynomials"]["saved {:.1e}".format(epsilon)] = saved_polynomials
-
         result["opfts"]["{:.1e}".format(epsilon)] = overall_percent_failure_to_solve
         result["opsw"]["{:.1e}".format(epsilon)] = overall_percent_steps_wasted
         result["oppp"]["{:.1e}".format(epsilon)] = overall_percent_polys_problematic
@@ -398,16 +401,16 @@ def save_dataframes_to_tabs_of_file(df_dict, file_path, subcolumn_suffix_order =
     writer.save()
 
 
-sample_size = 32
+sample_size = 64
 poly_degrees = [2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10]
 epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-9 ]#, 1e-12]
 max_steps_list = [3 , 4 , 5 , 6 , 7 , 8 , 16 , 32 , 64 , 128 , 256 , 512 , 1024 , 2048 , 4096]
 
-static_speed_results = static_speed_chart(num_observations = sample_size , poly_degrees = poly_degrees , max_steps = max_steps_list , only_int_roots = False , human_dividing = False)
-save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/new_static_speed_chart12.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+static_accuracy_results = static_accuracy_chart(num_observations = sample_size , poly_degrees = poly_degrees , epsilons = epsilons , only_int_roots = False , human_dividing = False , debug = True)
+save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/new_static_accuracy_chart13.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
 input("Press Enter to continue...")
-static_accuracy_results = static_accuracy_chart(num_observations = sample_size , poly_degrees = poly_degrees , epsilons = epsilons , only_int_roots = False , human_dividing = False)
-save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/new_static_accuracy_chart12.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+#static_speed_results = static_speed_chart(num_observations = sample_size , poly_degrees = poly_degrees , max_steps = max_steps_list , only_int_roots = False , human_dividing = False)
+#save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/new_static_speed_chart14.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
 
 # print(get_data_of_poly_roots_static_speed(500 , 10 , 32))
 shame = Polynomial([476280.00000361796 , 1905120.0])
