@@ -257,6 +257,12 @@ class Polynomial:
 
             poly_to_subtract = divisor.multiply(partial_quotient_poly)
             remainder_polynomial = remainder_polynomial.subtract(poly_to_subtract)
+        # in the special case of dividing out a linear equation, the actual roots can be adjusted
+        if divisor.get_degree() == 1:
+            root_to_remove_calculated = divisor.get_linear_root()
+            root_to_remove_actual = self.get_closest_exact_root(root_to_remove_calculated)
+            result.poly_roots = self.poly_roots.copy()
+            result.poly_roots.remove(root_to_remove_actual)
         return result , remainder_polynomial
 
     def evaluate(self , x):
