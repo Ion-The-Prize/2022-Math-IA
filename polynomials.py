@@ -93,12 +93,17 @@ class Polynomial:
         else:
             self.poly_roots = None
         self.poly_degree = len(poly_coefficients_list) - 1
+        self.save_reason = None
 
     def __eq__(self, other):
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
-        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots)
+        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots) + (":: reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "")
+
+    def save_polynomial(self, reason):
+        """:type reason: str"""
+        self.save_reason = reason
 
     def poly_printer(self , desmos_format = False, coeff_format = None):
         """
