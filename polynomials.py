@@ -99,13 +99,20 @@ class Polynomial:
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
-        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots) + "::" + "reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "Not saved"
+        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots) + '::' + (" reason for saving: {}".format(self.save_reason) if self.save_reason is not None else " Not saved")
 
     def save_polynomial(self, reason):
         """:type reason: str"""
         self.save_reason = reason
 
-    def poly_printer(self , desmos_format = False, coeff_format = None):
+    def is_imaginary(self):
+        if self.get_degree() == 2:
+            discriminant = math.pow(self.poly_coefficients_list[1] , 2) - 4 * self.poly_coefficients_list[2] * self.poly_coefficients_list[0]
+            if discriminant < 0:
+                return True
+            return False
+
+    def poly_printer(self , desmos_format = False, coeff_format = None , notes = True):
         """
         Given a Polynomial, returns that polynomial in math language form
         (e.g. given Polynomial([-1, 5, 10, 10, -5, 1], None), returns x^5 - 5x^4 + 10x^3 - 10x^2 + 5x - 1 )
@@ -115,13 +122,13 @@ class Polynomial:
         :param coeff_format: the Python language formatting of the coefficients (default is to run float_to_string on
             coefficients where extra 0-value decimal places are removed, but something like coeff_format="{:.3e}" would
             give the coefficients in scientific notation with 3 decimal places)
+        :param notes: whether note string (e.g. " [imaginary]") will be added to end of printed poly
         :return: string of math language polynomial
         """
 
         note = ""
-        if self.get_degree() == 2:
-            discriminant = math.pow(self.poly_coefficients_list[1] , 2) - 4 * self.poly_coefficients_list[2] * self.poly_coefficients_list[0]
-            if discriminant < 0:
+        if not notes:
+            if self.is_imaginary():
                 note = " [imaginary]"
 
         result = ""
@@ -552,13 +559,14 @@ class Polynomial:
         remainders = []
         factored_poly = self
         attempts = 0
+        interesting_polys = []
         while factored_poly.poly_degree > 0:
             guess = guess_range_min + (guess_range_max - guess_range_min) * random.random()
             newton_result = factored_poly.get_newton_root_from_point(guess, max_steps_per_root, epsilon, debug = debug)
             if newton_result.root_was_found:
                 found_root_x_value = newton_result.x_value
-                if self.poly_roots is not None:
-                    matching_real_root = self.get_closest_exact_root(found_root_x_value)
+                if factored_poly.poly_roots is not None:
+                    matching_real_root = factored_poly.get_closest_exact_root(found_root_x_value)
                     # print("Found root {:.3f} is closest to real root {:.3f} [diff={:g}]".format(found_root, matching_real_root, (matching_real_root-found_root)))
                     newton_result.associate_with_real_root(matching_real_root)
 
@@ -585,11 +593,17 @@ class Polynomial:
                 print("  Failed root[0]: ", failed_roots[0])
                 print("  Failed root[0] guess history: ",['{:.3e}'.format(g) for g in failed_roots[0].guess_history])
                 print("==")
+                if factored_poly.get_degree() == 1:
+                    self.save_polynomial("Became linear poly {} (wall. of. shame. wall. of. shame. wall. of. shame.)".format(factored_poly.poly_printer(notes = False)))
+                    interesting_polys.append(self)
+                elif factored_poly.get_degree() == 2 and factored_poly.is_imaginary():
+                    self.save_polynomial("Became imaginary {}".format(factored_poly.poly_printer(notes = False)))
+                    interesting_polys.append(self)
 
                 break
         if sort_roots:
             calculated_poly_roots_set.sort()
-        return len(calculated_poly_roots_set) == self.get_degree() , calculated_poly_roots_set , failed_roots , remainders
+        return len(calculated_poly_roots_set) == self.get_degree() , calculated_poly_roots_set , failed_roots , remainders , interesting_polys
 
     def poly_power(self , power , pascal = False):
         """
