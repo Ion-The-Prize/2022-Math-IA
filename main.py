@@ -90,10 +90,11 @@ def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon 
             solved_completely , poly_roots , fail_roots , remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon , sort_roots = False)
         """
         polynomial = testing_polynomials[i]  # "for polynomial in testing_polynomials" is not done so polynomials can be retried
-        solved_completely , calculated_poly_roots_set , fail_roots , \
-            remainders = polynomial.get_roots_with_dividing(max_steps_per_root = 256 , epsilon = epsilon ,
-                                                            max_attempts_before_quitting = max_attempts_before_quitting,
-                                                            human_dividing = human_dividng , debug = debug)
+        solved_completely , calculated_poly_roots_set , fail_roots , remainders , neat_polynomials = \
+            polynomial.get_roots_with_dividing(max_steps_per_root = 256 , epsilon = epsilon,
+                                               max_attempts_before_quitting = max_attempts_before_quitting,
+                                               human_dividing = human_dividng , debug = debug)
+        interesting_polynomials.append(neat_polynomials)
 
         for failed_root in fail_roots:
             if failed_root.failure_reason == CalculatedRoot.FAILURES.HORIZONTAL:
@@ -203,7 +204,6 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
     epsilons.sort(reverse = True)
 
     result = dict()
-    result["polynomials"] = pandas.DataFrame(index = poly_degrees)  # The polynomials that were used
     result["opfts"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [that] failed to solve
     result["opsw"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [of] steps [that were] wasted (not successful)
     result["oppp"] = pandas.DataFrame(index = poly_degrees)  # Overall percentage [of] polynomials [that were] problematic
@@ -370,14 +370,15 @@ def static_speed_chart(num_observations = None, poly_degrees = None , max_steps 
     return result
 
 
-def order_dataframe_columns_in_subcolumn_order(dataframe , subcolumn_suffix_order , column_separations = False , row_title = "Degrees"):
+def order_dataframe_columns_in_subcolumn_order(dataframe , subcolumn_suffix_order , column_separations = False , row_title = "Degree"):
     original_dataframe_column_names = dataframe.columns.tolist()
 
     if column_separations:
         original_dataframe_index = dataframe.index.tolist()
+        titled_dataframe_index = ["{} {}".format(row_title, row) for row in original_dataframe_index]
         blank_column = [None] * len(original_dataframe_index)
         dataframe["BLANK"] = blank_column
-        dataframe["{}".format(row_title)] = original_dataframe_index
+        dataframe["{}".format(row_title)] = titled_dataframe_index
 
     resulting_column_order = []
     for suffix in subcolumn_suffix_order:
@@ -401,16 +402,16 @@ def save_dataframes_to_tabs_of_file(df_dict, file_path, subcolumn_suffix_order =
     writer.save()
 
 
-sample_size = 64
+sample_size = 512
 poly_degrees = [2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10]
-epsilons = [1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-9 ]#, 1e-12]
+epsilons = [1e-3 , 5e-4 , 1e-4 , 5e-5 , 1e-5 , 5e-6 , 1e-6 , 5e-7 , 1e-7 , 5e-8 , 1e-8 , 5e-9 , 1e-9 , 5e-10 , 1e-10]
 max_steps_list = [3 , 4 , 5 , 6 , 7 , 8 , 16 , 32 , 64 , 128 , 256 , 512 , 1024 , 2048 , 4096]
 
-static_accuracy_results = static_accuracy_chart(num_observations = sample_size , poly_degrees = poly_degrees , epsilons = epsilons , only_int_roots = False , human_dividing = False , debug = True)
-save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/new_static_accuracy_chart13.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+static_accuracy_results = static_accuracy_chart(num_observations = sample_size , poly_degrees = poly_degrees , epsilons = epsilons , only_int_roots = False , human_dividing = False , debug = False)
+save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/new_static_accuracy_chart14.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
 input("Press Enter to continue...")
-#static_speed_results = static_speed_chart(num_observations = sample_size , poly_degrees = poly_degrees , max_steps = max_steps_list , only_int_roots = False , human_dividing = False)
-#save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/new_static_speed_chart14.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+static_speed_results = static_speed_chart(num_observations = sample_size , poly_degrees = poly_degrees , max_steps = max_steps_list , only_int_roots = False , human_dividing = False)
+save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/new_static_speed_chart14.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
 
 # print(get_data_of_poly_roots_static_speed(500 , 10 , 32))
 shame = Polynomial([476280.00000361796 , 1905120.0])
@@ -542,7 +543,7 @@ print(new_poly.poly_printer())
 print()
 print("Poly Coeff: ", new_poly.poly_coefficients_list)
 print("Real Roots: ", new_poly.poly_roots)
-solved_completely , calc_roots , fail_roots , remainders = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_attempts_before_quitting = 50 , epsilon = 1e-9)
+solved_completely , calc_roots , fail_roots , remainders , temp_cool_polys = new_poly.get_roots_with_dividing(max_steps_per_root = 4096 , max_attempts_before_quitting = 50 , epsilon = 1e-9)
 print("Calc Roots: ", [root.x_value for root in calc_roots])
 print("Round Root: ", [root.x_value for root in root_rounder(calc_roots)])
 print("Root Steps: ", [root.steps_taken for root in calc_roots])
