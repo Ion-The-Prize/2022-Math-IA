@@ -99,7 +99,7 @@ class Polynomial:
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
-        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots) + (":: reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "")
+        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots) + "::" + "reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "Not saved"
 
     def save_polynomial(self, reason):
         """:type reason: str"""
@@ -541,8 +541,7 @@ class Polynomial:
         :return: triple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)] , list[Polynomial (remainders)]]
         """
 
-        real_roots_left = self.poly_roots
-        poly_roots = []
+        calculated_poly_roots_set = []
         failed_roots = []
         remainders = []
         factored_poly = self
@@ -551,16 +550,11 @@ class Polynomial:
             guess = guess_range_min + (guess_range_max - guess_range_min) * random.random()
             newton_result = factored_poly.get_newton_root_from_point(guess, max_steps_per_root, epsilon, debug = debug)
             if newton_result.root_was_found:
-                found_root = newton_result.x_value
+                found_root_x_value = newton_result.x_value
                 if self.poly_roots is not None:
-                    matching_real_root = None
-                    for real_root in real_roots_left:
-                        # if we haven't found a matching real root yet or if this real_root is closer than the one we already matched
-                        if matching_real_root is None or abs(real_root - found_root) < abs(matching_real_root - found_root):
-                            matching_real_root = real_root
+                    matching_real_root = self.get_closest_exact_root(found_root_x_value)
                     # print("Found root {:.3f} is closest to real root {:.3f} [diff={:g}]".format(found_root, matching_real_root, (matching_real_root-found_root)))
                     newton_result.associate_with_real_root(matching_real_root)
-                    real_roots_left.remove(matching_real_root)
 
                     factor = make_polynomial_from_coefficients(-1.0 * newton_result.associated_real_root , 1.0) if human_dividing else make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
                 else:
@@ -570,7 +564,7 @@ class Polynomial:
                     print("Factor         " , factor.poly_printer())
                     print("Remaining Poly:" , factored_poly.poly_printer())
                     print("Remainder:     " , factor_remainder.poly_printer())
-                poly_roots.append(newton_result)
+                calculated_poly_roots_set.append(newton_result)
                 remainders.append(factor_remainder)  # store remainder
                 attempts = 0
             else:
@@ -581,15 +575,15 @@ class Polynomial:
                      "LINEAR!!" if factored_poly.get_degree() == 1 else "",
                      epsilon , attempts , factored_poly.poly_printer(coeff_format="{}")))
                 print("  Original poly: {}. All roots: {}".format(self, self.poly_roots))
-                print("  Roots found so far: {}".format(" || ".join(str(r) for r in poly_roots)))
+                print("  Roots found so far: {}".format(" || ".join(str(r) for r in calculated_poly_roots_set)))
                 print("  Failed root[0]: ", failed_roots[0])
                 print("  Failed root[0] guess history: ",['{:.3e}'.format(g) for g in failed_roots[0].guess_history])
                 print("==")
 
                 break
         if sort_roots:
-            poly_roots.sort()
-        return len(poly_roots) == self.get_degree() , poly_roots , failed_roots , remainders
+            calculated_poly_roots_set.sort()
+        return len(calculated_poly_roots_set) == self.get_degree() , calculated_poly_roots_set , failed_roots , remainders
 
     def poly_power(self , power , pascal = False):
         """
