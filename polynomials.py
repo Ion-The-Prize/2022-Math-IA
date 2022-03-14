@@ -52,7 +52,7 @@ class CalculatedRoot:
 
     def __repr__(self):
         if self.root_was_found:
-            return "x={:.3f} y={:.3e} {} (#{:d} from {:.3f})".format(
+            return "x={:.5e} y={:.3e} {} (#{:d} from {:.5e})".format(
                 self.x_value , self.y_value ,
                 "closest root={:g} err={:g}".format(self.associated_real_root , self.x_error) if self.x_error is not None else "" ,
                 self.steps_taken ,
@@ -796,7 +796,7 @@ class ZoomPlot:
             point_colors = []
             for x_val in x:
                 # This is coloring point. We could also color the background: https://stackoverflow.com/a/9957832
-                newton_result = self.polynomial.get_newton_root_from_point(x_val, max_steps=50)
+                newton_result = self.polynomial.get_newton_root_from_point(x_val, max_steps = 50)
                 if newton_result.root_was_found:
                     exact_root = self.polynomial.get_closest_exact_root(newton_result.x_value)
                     point_colors.append(self.color_assignments.get_color(exact_root))
@@ -821,7 +821,7 @@ class ZoomPlot:
             tangent_x_intercept = x - (y/slope)
             y_value_at_tangent_x_intercept = self.polynomial.evaluate(tangent_x_intercept)
 
-            newton_result = self.polynomial.get_newton_root_from_point(x)
+            newton_result = self.polynomial.get_newton_root_from_point(x, max_steps = 50)
 
             sel.annotation.set(text="Point ({:.4g} , {:.4g})\nslope={:.3g}\ntangent leads to ({:.4g},{:.4g})\nnewton result: {}". format(
                 x,y,slope, tangent_x_intercept, y_value_at_tangent_x_intercept, newton_result))
@@ -866,7 +866,7 @@ class ZoomPlot:
         # a single click (no movement) does a newton-root in debug mode
         # (less than 1/20 of screen)
         if abs(self.xrelease - self.xpress) < 0.05*(self.xmax - self.xmin):
-            self.polynomial.get_newton_root_from_point(self.xpress, debug=True)
+            self.polynomial.get_newton_root_from_point(self.xpress, max_steps = 50, debug = True)
             return
 
         self.xmin = min(self.xpress, self.xrelease)
