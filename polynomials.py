@@ -77,12 +77,16 @@ class Polynomial:
 
     def __init__(self , poly_coefficients_list , poly_roots = None):
         """
+        "A polynomial is born"
 
-        :param poly_coefficients_list:
+        :param poly_coefficients_list: a list of the coefficients that make up the polynomial (in reverse order to math
+             language; the list index of a coefficient corresponds to the degree of the x that it is a coefficient of
+             (e.g. coefficients [2, -5, 6, -7, 1] make quartic x^4 - 7x^3 + 6x^2 - 5x + 2))
         :type poly_coefficients_list: list
-        :param poly_roots:
+        :param poly_roots: the actual roots of this polynomial
         :type poly_roots: list
         """
+
         self.poly_coefficients_list = [wrap_float(c) for c in poly_coefficients_list]
         if poly_roots is not None:
             self.poly_roots = [wrap_float(r) for r in poly_roots]
@@ -94,15 +98,18 @@ class Polynomial:
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
-        return self.poly_printer() + '::' + str(self.poly_coefficients_list)
+        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots)
 
     def poly_printer(self , desmos_format = False, coeff_format = None):
         """
         Given a Polynomial, returns that polynomial in math language form
-        (e.g. given [-1, 5, 10, 10, -5, 1] and [1], returns x^5 - 5x^4 + 10x^3 - 10x^2 + 5x - 1 )
+        (e.g. given Polynomial([-1, 5, 10, 10, -5, 1], None), returns x^5 - 5x^4 + 10x^3 - 10x^2 + 5x - 1 )
 
         :param desmos_format: whether the output will be copy-able into Desmos (default to standard math format)
         :type desmos_format: bool
+        :param coeff_format: the Python language formatting of the coefficients (default is to run float_to_string on
+            coefficients where extra 0-value decimal places are removed, but something like coeff_format="{:.3e}" would
+            give the coefficients in scientific notation with 3 decimal places)
         :return: string of math language polynomial
         """
 
@@ -194,7 +201,7 @@ class Polynomial:
         return Polynomial(result_coefficients_list , result_roots)
 
     def add(self , *other_polynomials):
-        """Adds polynomials, returns Polynomial sum"""
+        """Adds any number of polynomials to self, returns Polynomial sum"""
 
         result_coefficients_list = self.poly_coefficients_list.copy()
 
@@ -223,7 +230,7 @@ class Polynomial:
 
     def divide(self , divisor = None):
         """
-        Divides a self by another polynomial.
+        Divides self by another polynomial.
 
         :param divisor: coefficients of a second polynomial (the divisor) (default is [1] (function returns dividend_polynomial))
         :type divisor: Polynomial
@@ -295,7 +302,7 @@ class Polynomial:
 
     def get_tangent_line(self , x):
         """
-        Invokes evaluate & poly_primer to generate a tangent line
+        Invokes evaluate & poly_primer to generate a tangent line of self at given x-value
 
         :param x: x value
         :type x: float
@@ -314,6 +321,7 @@ class Polynomial:
 
     def get_relative_extrema(self):
         """
+        WORK IN PROGRESS
         Given a Polynomial with degree >1, returns tuple lists of x values of relative maxima and minima
 
         :return: tuple list of relative maxima , relative minima (e.g. max @ x = -4.0, min @ x = 4.0 is [-4.0] [4.0]
@@ -339,6 +347,16 @@ class Polynomial:
         return rel_maxima , rel_minima
 
     def get_closest_exact_root(self, approximate_root):
+        """
+        Given the x-value of an approximate root (such as one from Newton's method), returns self's closest exact root
+        Self needs to have exact roots, otherwise this will not work.
+
+        :param approximate_root: x-value of approximate root
+        :type approximate_root: float
+        :return: x-value of self's closest exact root
+        """
+
+        approximate_root = wrap_float(approximate_root)
         closest_exact_root = None
         closest_epsilon = None
         assert self.poly_roots is not None
@@ -355,14 +373,14 @@ class Polynomial:
 
         return closest_exact_root
 
-    def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8 , debug = False , minimum_adjustment = None , no_progress_threshold = 1e-12 , stop_when_no_progress = False):
+    def get_newton_root_from_point(self , starting_x , max_steps = 10 , epsilon = 1e-8 , minimum_adjustment = None ,
+                                   no_progress_threshold = 1e-12 , stop_when_no_progress = False , debug = False):
         """
         Performs Newton's method for finding roots at a given x-value
 
         :param starting_x: the x-value that Newton's method will be performed on
         :param max_steps: maximum steps before a result is considered failed
         :param epsilon: really small value that the y-value of a root approximation needs to be below for the root approximation to be considered an actual root
-        :param debug: whether debug strings will be printed
         :param minimum_adjustment: If a value is given, this will be the minimum delta x-value for each step
         :type minimum_adjustment: float
         :param no_progress_threshold: the delta-x between steps that is considered no progress.
@@ -370,6 +388,8 @@ class Polynomial:
         :param stop_when_no_progress: if False (default), the first step at which delta-x between steps is less than
             no_progress_threshold will be recorded but no action taken. If True, then the root will be returned failed
             because of CalculatedRoot.FAILURES.NO_PROGRESS when delta-x is less than no_progress_threshold
+        :param debug: whether informational/debugging strings will be printed (some (mostly error/failure case ones)
+            will still be printed even if set to false)
         :return: CalculatedRoot
         """
 
@@ -403,14 +423,16 @@ class Polynomial:
                     new_guess = current_guess + math.copysign(minimum_adjustment , new_guess - current_guess)
                 else:
                     if first_step_with_no_progress is None:
-                        print(
-                            "Failed to make progress on finding root after {} steps at x={:.5e} where y={:.5e}. Last update was {:.5e}. Poly: {}".format(
-                                step_number , current_guess , current_value , current_guess - new_guess , self))
+                        if debug:
+                            print(
+                                "Failed to make progress on finding root after {} steps at x={:.5e} where y={:.5e}. Last update was {:.5e}. Poly: {}".format(
+                                    step_number , current_guess , current_value , current_guess - new_guess , self))
                         first_step_with_no_progress = step_number
                     else:
                         steps_without_progress += 1
                     if stop_when_no_progress:
-                        print("Search ended.")
+                        if debug:
+                            print("Search ended.")
                         return CalculatedRoot(current_guess, current_value, step_number, starting_x,
                                               guess_history = guess_history, root_was_found = False,
                                               failure_reason = CalculatedRoot.FAILURES.NO_PROGRESS,
@@ -487,8 +509,9 @@ class Polynomial:
             poly_roots.sort()
         return poly_roots , failed_roots
 
-    def get_roots_with_dividing(self , max_steps_per_root = 20 , max_attempts_before_quitting = 100 , epsilon = 1e-10 , guess_range_min = -BUILD_BINOMIAL_RANGE - 1 ,
-                                guess_range_max = BUILD_BINOMIAL_RANGE + 1 , sort_roots = False , human_dividing = False):
+    def get_roots_with_dividing(self , max_steps_per_root = 20 , max_attempts_before_quitting = 100 , epsilon = 1e-10 ,
+                                guess_range_min = -BUILD_BINOMIAL_RANGE - 1, guess_range_max = BUILD_BINOMIAL_RANGE + 1,
+                                sort_roots = False , human_dividing = False , debug = False):
         """
         Uses Newton's method for finding roots of higher order polynomials. After finding a root, it is factored out
             of the polynomial, resulting in all the actual roots with no extra repeats
@@ -508,6 +531,8 @@ class Polynomial:
         :param sort_roots: whether the final roots string will be sorted from most negative to most positive (default False)
         :type sort_roots: bool
         :param human_dividing: whether the factored out roots will be the actual root (True) or the calculated one (False)
+        :param debug: whether informational/debugging strings will be printed (some (mostly error/failure case ones)
+            will still be printed even if set to false)
         :return: triple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)] , list[Polynomial (remainders)]]
         """
 
@@ -519,7 +544,7 @@ class Polynomial:
         attempts = 0
         while factored_poly.poly_degree > 0:
             guess = guess_range_min + (guess_range_max - guess_range_min) * random.random()
-            newton_result = factored_poly.get_newton_root_from_point(guess , max_steps_per_root , epsilon)
+            newton_result = factored_poly.get_newton_root_from_point(guess, max_steps_per_root, epsilon, debug = debug)
             if newton_result.root_was_found:
                 found_root = newton_result.x_value
                 if self.poly_roots is not None:
@@ -536,9 +561,10 @@ class Polynomial:
                 else:
                     factor = make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
                 factored_poly , factor_remainder = factored_poly.divide(factor)  # remainder's only returned; never used
-                # print("Factor         " , factor.poly_printer())
-                # print("Remaining Poly:" , factored_poly.poly_printer())
-                # print("Remainder:     " , factor_remainder.poly_printer())
+                if debug:
+                    print("Factor         " , factor.poly_printer())
+                    print("Remaining Poly:" , factored_poly.poly_printer())
+                    print("Remainder:     " , factor_remainder.poly_printer())
                 poly_roots.append(newton_result)
                 remainders.append(factor_remainder)  # store remainder
                 attempts = 0
@@ -560,13 +586,13 @@ class Polynomial:
             poly_roots.sort()
         return len(poly_roots) == self.get_degree() , poly_roots , failed_roots , remainders
 
-    def poly_power(self , power , pascal = 0):
+    def poly_power(self , power , pascal = False):
         """
-        Raises a given polynomial to a specified power
+        Raises self to a specified power
 
-        :param power: the power that the polynomial will be raised to
+        :param power: the power that self will be raised to
         :type power: int
-        :param pascal: whether or not every step should be printed (giving pascal's triangle) (default no) (!= 0 is yes)
+        :param pascal: whether or not every step should be printed (giving pascal's triangle) (default no)
         :type pascal: any
         :return: list coefficients for polynomial
         """
@@ -577,7 +603,7 @@ class Polynomial:
 
         for i in range(power):
             current_answer = current_answer.multiply(self)
-            if pascal != 0:
+            if pascal:
                 print(i ,
                       current_answer.poly_coefficients_list)  # numbers rows of pascal's triangle as degree of poly from a binomial (so [1 2 1] is row 2)
         return current_answer
@@ -632,6 +658,8 @@ class Polynomial:
 
 def build_a_monomial(leading_coefficient , degree):
     """
+    Makes a monomial! Examples from our satisfied customers include: x^4, 4x^4, 44x^4, 44x^44, and so many more!
+
     :type leading_coefficient: float
     :type degree: int
     """
