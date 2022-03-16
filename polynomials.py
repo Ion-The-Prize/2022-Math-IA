@@ -37,7 +37,7 @@ class CalculatedRoot:
         NO_PROGRESS = 1
         HIT_STEP_LIMIT = 2
 
-    def __init__(self , x_value , y_value , steps_taken , starting_guess , guess_history = None, root_was_found = True, failure_reason = None , first_step_with_no_progress = None):
+    def __init__(self , x_value , y_value , steps_taken , starting_guess , guess_history = None, root_was_found = True, failure_reason = None , first_step_with_no_progress = None , additional_steps_taken = None):
         self.x_value = x_value
         self.y_value = y_value
         self.steps_taken = steps_taken
@@ -49,6 +49,7 @@ class CalculatedRoot:
         self.x_error = None
         self.y_error = math.fabs(y_value)
         self.first_step_with_no_progress = first_step_with_no_progress
+        self.additional_steps_taken = additional_steps_taken
 
     def __repr__(self):
         if self.root_was_found:
@@ -467,6 +468,16 @@ class Polynomial:
             if debug:
                 print("Found root after {} steps at x={:.5e} where y={:.5e}. Poly: {}".format(
                     step_number, current_guess, current_value, self))
+            if first_step_with_no_progress is not None:
+                # It pushed through no_progress and eventually found a root
+                additional_steps_taken = 1 + step_number - first_step_with_no_progress
+                if debug:
+                    print("!!POWERED THROUGH!! Extra steps={} total steps={} (x,y)=({:.5e},{:.5e}). Poly: {}".format(
+                        additional_steps_taken , step_number , current_guess , current_value , self))
+                return CalculatedRoot(current_guess , current_value , step_number , starting_x,
+                                      guess_history = guess_history,
+                                      first_step_with_no_progress = first_step_with_no_progress,
+                                      additional_steps_taken = additional_steps_taken)
             return CalculatedRoot(current_guess , current_value , step_number , starting_x,
                                   guess_history = guess_history,
                                   first_step_with_no_progress = first_step_with_no_progress)
@@ -529,7 +540,8 @@ class Polynomial:
 
     def get_roots_with_dividing(self , max_steps_per_root = 20 , max_attempts_before_quitting = 100 , epsilon = 1e-10 ,
                                 guess_range_min = -BUILD_BINOMIAL_RANGE - 1, guess_range_max = BUILD_BINOMIAL_RANGE + 1,
-                                sort_roots = False , human_dividing = False , debug = False):
+                                sort_roots = False , human_dividing = False , no_progress_threshold = 1e-12 ,
+                                stop_when_no_progress = False , debug = False):
         """
         Uses Newton's method for finding roots of higher order polynomials. After finding a root, it is factored out
             of the polynomial, resulting in all the actual roots with no extra repeats
@@ -559,10 +571,9 @@ class Polynomial:
         remainders = []
         factored_poly = self
         attempts = 0
-        interesting_polys = []
         while factored_poly.poly_degree > 0:
             guess = guess_range_min + (guess_range_max - guess_range_min) * random.random()
-            newton_result = factored_poly.get_newton_root_from_point(guess, max_steps_per_root, epsilon, debug = debug)
+            newton_result = factored_poly.get_newton_root_from_point(guess, max_steps_per_root, epsilon, no_progress_threshold = no_progress_threshold, stop_when_no_progress = stop_when_no_progress, debug = debug)
             if newton_result.root_was_found:
                 found_root_x_value = newton_result.x_value
                 if factored_poly.poly_roots is not None:
@@ -585,25 +596,23 @@ class Polynomial:
                 failed_roots += [newton_result]
                 attempts += 1
             if attempts >= max_attempts_before_quitting != 0:
-                print("{}Could not find factorable root within {:.1e} after trying {} times. {}".format(
-                     "LINEAR!!" if factored_poly.get_degree() == 1 else "",
-                     epsilon , attempts , factored_poly.poly_printer(coeff_format="{}")))
-                print("  Original poly: {}. All roots: {}".format(self, self.poly_roots))
-                print("  Roots found so far: {}".format(" || ".join(str(r) for r in calculated_poly_roots_set)))
-                print("  Failed root[0]: ", failed_roots[0])
-                print("  Failed root[0] guess history: ",['{:.3e}'.format(g) for g in failed_roots[0].guess_history])
-                print("==")
+                if debug:
+                    print("{}Could not find factorable root within {:.1e} after trying {} times. {}".format(
+                         "LINEAR!!" if factored_poly.get_degree() == 1 else "",
+                         epsilon , attempts , factored_poly.poly_printer(coeff_format="{}")))
+                    print("  Original poly: {}. All roots: {}".format(self, self.poly_roots))
+                    print("  Roots found so far: {}".format(" || ".join(str(r) for r in calculated_poly_roots_set)))
+                    print("  Failed root[0]: ", failed_roots[0])
+                    print("  Failed root[0] guess history: ",['{:.3e}'.format(g) for g in failed_roots[0].guess_history])
+                    print("==")
                 if factored_poly.get_degree() == 1:
                     self.save_polynomial("Became linear poly {} (wall. of. shame. wall. of. shame. wall. of. shame.)".format(factored_poly.poly_printer(notes = False)))
-                    interesting_polys.append(self)
                 elif factored_poly.get_degree() == 2 and factored_poly.is_imaginary():
                     self.save_polynomial("Became imaginary {}".format(factored_poly.poly_printer(notes = False)))
-                    interesting_polys.append(self)
-
                 break
         if sort_roots:
             calculated_poly_roots_set.sort()
-        return len(calculated_poly_roots_set) == self.get_degree() , calculated_poly_roots_set , failed_roots , remainders , interesting_polys
+        return len(calculated_poly_roots_set) == self.get_degree() , calculated_poly_roots_set , failed_roots , remainders
 
     def poly_power(self , power , pascal = False):
         """
