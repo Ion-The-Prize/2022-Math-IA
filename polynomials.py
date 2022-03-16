@@ -53,13 +53,13 @@ class CalculatedRoot:
 
     def __repr__(self):
         if self.root_was_found:
-            return "x={:.5e} y={:.3e} {} (#{:d} from {:.5e})".format(
+            return "x={:.5e} y={:.3e} {} ({:d} steps from {:.5e})".format(
                 self.x_value , self.y_value ,
                 "closest root={:g} err={:g}".format(self.associated_real_root , self.x_error) if self.x_error is not None else "" ,
                 self.steps_taken ,
                 self.starting_guess)
         else:
-            return "FAIL ({}): (x,y)=({:.3f}, {:.3e})(#{:d} from {:.3f})".format(self.failure_reason, self.x_value , self.y_value , self.steps_taken , self.starting_guess)
+            return "FAIL ({}): (x,y)=({:.3f}, {:.3e})({:d} steps from {:.3f})".format(self.failure_reason, self.x_value , self.y_value , self.steps_taken , self.starting_guess)
 
     def __str__(self):
         return self.__repr__()
@@ -841,7 +841,7 @@ class ZoomPlot:
         self.ax.clear()
         self.ax.set_title(self.polynomial.poly_printer())
         sc=self.ax.scatter(x, y, color=point_colors, s=5)
-        cursor = mplcursors.cursor(sc, hover=mplcursors.HoverMode.Transient)
+        cursor = mplcursors.cursor(sc, hover=mplcursors.HoverMode.Persistent)
 
         # hovering shows newton information
         # by default the annotation displays the xy positions
@@ -849,15 +849,18 @@ class ZoomPlot:
         def on_add(sel : mplcursors.Selection):
             x=sel.target[0]
             y=sel.target[1]
-            print("MPL Target: ({:.3e},{:.3e})".format(x,y))
+            #print("MPL Target: ({:.3e},{:.3e})".format(x,y))
             slope = self.polynomial.poly_primer().evaluate(x)
-            tangent_x_intercept = x - (y/slope)
-            y_value_at_tangent_x_intercept = self.polynomial.evaluate(tangent_x_intercept)
+            tangent_line = self.polynomial.get_tangent_line(x)
+            tangent_x_intercept = tangent_line.get_linear_root()
+
+            poly_y_value_at_tangent_x_intercept = self.polynomial.evaluate(tangent_x_intercept)
 
             newton_result = self.polynomial.get_newton_root_from_point(x, max_steps = 50)
 
-            sel.annotation.set(text="Point ({:.4g} , {:.4g})\nslope={:.3g}\ntangent leads to ({:.4g},{:.4g})\nnewton result: {}". format(
-                x,y,slope, tangent_x_intercept, y_value_at_tangent_x_intercept, newton_result))
+            sel.annotation.set(text="Point ({:.4g} , {:.4g})\nslope={:.3g}\ntangent line: {:s} (x-intercept {:.3g})\npoly({:.3g})={:.4g})\noverall newton result: {}". format(
+                x,y,slope, tangent_line.poly_printer(coeff_format="{:.3g}"),
+                tangent_x_intercept, tangent_x_intercept, poly_y_value_at_tangent_x_intercept, newton_result))
             #sel.annotation.set(text=tt[sel.target.index])
 
         self.ax.yaxis.grid(True)
@@ -884,14 +887,12 @@ class ZoomPlot:
             self.ax.plot(x,tan_ys,color='black')
             tangent_zero_x = self.tangent_to_plot.get_linear_root()
 
-            self.ax.annotate("(x,y)=({:.3g},{:.3g})\n{:}\ntangent zero={:.3g}".format(
-                            self.tangent_x_point, self.tangent_y_point,
-                            self.tangent_to_plot.poly_printer(coeff_format="{:.3e}"),
-                            tangent_zero_x),
-                             xy=(self.tangent_x_point, self.tangent_y_point))
+            highlight_point_size=10
+
+            self.ax.scatter([self.tangent_x_point], [self.tangent_y_point], color='black', s=highlight_point_size)
 
             if self.is_x_value_displayed(tangent_zero_x):
-                self.ax.scatter([tangent_zero_x], [0], color='black', s=8)
+                self.ax.scatter([tangent_zero_x], [0], color='black', s=highlight_point_size)
 
                 # self.ax.annotate("x={:.3g}".format(tangent_zero_x),
                 #                  xy=(tangent_zero_x, 0))
@@ -901,8 +902,8 @@ class ZoomPlot:
         plt.gcf().canvas.draw_idle()
 
     def onpress(self, event):
-        if event.button == 3:
-            # Reset the original range on RIGHT click
+        if event.button == 2:
+            # Reset the original range on MIDDLE click
             self.xmin = self.orig_xmin
             self.xmax = self.orig_xmax
             self.tangent_to_plot=None
