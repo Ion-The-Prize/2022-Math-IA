@@ -807,9 +807,19 @@ class ZoomPlot:
         self.resolution = 400
         self.maxiters = 30
 
+        # Other polynomials to add to the graph (eg, tangent lines, etc)
+        self.tangent_to_plot = None
+        self.tangent_x_point = None
+        self.tangent_y_point = None
+
         self.fig.canvas.mpl_connect('button_press_event', self.onpress)
         self.fig.canvas.mpl_connect('button_release_event', self.onrelease)
         self.plot()
+
+    def is_x_value_displayed(self, x):
+        x_range = self.xmax-self.xmin
+
+        return self.xmin - 0.05*x_range <= x <= self.xmax + 0.05*x_range
 
     def plot(self):
         print("Plotting from {:.2f} to {:.2f}".format(self.xmin, self.xmax))
@@ -831,7 +841,7 @@ class ZoomPlot:
         self.ax.clear()
         self.ax.set_title(self.polynomial.poly_printer())
         sc=self.ax.scatter(x, y, color=point_colors, s=5)
-        cursor = mplcursors.cursor(sc, hover=True)
+        cursor = mplcursors.cursor(sc, hover=mplcursors.HoverMode.Transient)
 
         # hovering shows newton information
         # by default the annotation displays the xy positions
@@ -850,7 +860,6 @@ class ZoomPlot:
                 x,y,slope, tangent_x_intercept, y_value_at_tangent_x_intercept, newton_result))
             #sel.annotation.set(text=tt[sel.target.index])
 
-
         self.ax.yaxis.grid(True)
 
         # Find the Zeros in the current view
@@ -866,6 +875,28 @@ class ZoomPlot:
         #https://www.adamsmith.haus/python/answers/how-to-plot-points-in-matplotlib-in-python
         self.ax.scatter(zeros_x, zeros_y, color=zeros_c)
 
+        if self.tangent_to_plot is not None:
+            # fix the y-scale so the tangent line doesn't expand it so much
+            # we find the y-range so we can add a little to the min and max
+            y_range = y.max() - y.min()
+            self.ax.set_ylim(y.min()-0.05*y_range, y.max()+0.05*y_range)
+            tan_ys=self.tangent_to_plot.evaluate_array(x)
+            self.ax.plot(x,tan_ys,color='black')
+            tangent_zero_x = self.tangent_to_plot.get_linear_root()
+
+            self.ax.annotate("(x,y)=({:.3g},{:.3g})\n{:}\ntangent zero={:.3g}".format(
+                            self.tangent_x_point, self.tangent_y_point,
+                            self.tangent_to_plot.poly_printer(coeff_format="{:.3e}"),
+                            tangent_zero_x),
+                             xy=(self.tangent_x_point, self.tangent_y_point))
+
+            if self.is_x_value_displayed(tangent_zero_x):
+                self.ax.scatter([tangent_zero_x], [0], color='black', s=8)
+
+                # self.ax.annotate("x={:.3g}".format(tangent_zero_x),
+                #                  xy=(tangent_zero_x, 0))
+
+
         #https://stackoverflow.com/a/43963231
         plt.gcf().canvas.draw_idle()
 
@@ -874,6 +905,7 @@ class ZoomPlot:
             # Reset the original range on RIGHT click
             self.xmin = self.orig_xmin
             self.xmax = self.orig_xmax
+            self.tangent_to_plot=None
             self.plot()
 
         if event.button == 1:
@@ -887,13 +919,20 @@ class ZoomPlot:
             return
 
         # a single click (no movement) does a newton-root in debug mode
-        # (less than 1/20 of screen)
+        # (no movement is anything less than 5% of width of the screen)
         if abs(self.xrelease - self.xpress) < 0.05*(self.xmax - self.xmin):
             self.polynomial.get_newton_root_from_point(self.xpress, max_steps = 50, debug = True)
+
+            tangent_line = self.polynomial.get_tangent_line(self.xpress)
+            self.tangent_to_plot = tangent_line
+            self.tangent_x_point = self.xpress
+            self.tangent_y_point = self.tangent_to_plot.evaluate(self.tangent_x_point)
+            self.plot()
             return
 
         self.xmin = min(self.xpress, self.xrelease)
         self.xmax = max(self.xpress, self.xrelease)
+        self.tangent_to_plot = None
         self.plot()
 
 
