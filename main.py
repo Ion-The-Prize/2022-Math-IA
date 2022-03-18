@@ -96,12 +96,16 @@ def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon 
                                                stop_when_no_progress = stop_when_no_progress , debug = debug)
 
         for failed_root in fail_roots:
-            if failed_root.failure_reason == CalculatedRoot.FAILURES.HORIZONTAL:
+            if failed_root.failure_reason == NewtonResult.FAILURES.HORIZONTAL:
                 zero_derivative_fail_count += 1
-            elif failed_root.failure_reason == CalculatedRoot.FAILURES.NO_PROGRESS:
+            elif failed_root.failure_reason == NewtonResult.FAILURES.NO_PROGRESS:
                 no_progress_fail_count += 1
-            elif failed_root.failure_reason == CalculatedRoot.FAILURES.HIT_STEP_LIMIT:
+            elif failed_root.failure_reason == NewtonResult.FAILURES.HIT_STEP_LIMIT:
                 hit_steps_limit_fail_count += 1
+        if not stop_when_no_progress:
+            for root in calculated_poly_roots_set:
+                if root.failure_reason == NewtonResult.FAILURES.NO_PROGRESS:
+                    no_progress_fail_count += 1
 
         if solved_completely:
             total_steps = int(np.sum([r.steps_taken for r in calculated_poly_roots_set])) + int(np.sum([r.steps_taken for r in fail_roots]))
@@ -120,7 +124,8 @@ def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon 
             if times_failed_single_poly > 1:
                 i += 1
                 problematic_poly_count += 1
-                print("PROBLEMATIC POLYNOMIAL: {}".format(polynomial))
+                if debug:
+                    print("PROBLEMATIC POLYNOMIAL: {}".format(polynomial))
                 polynomial.save_polynomial("Problem Child")
                 times_failed_single_poly = 0
     percent_steps_wasted = int(np.sum(result_wasted_steps)) / (int(np.sum(result_total_steps_successful_guess_when_completely_successful)) + int(np.sum(result_wasted_steps)))
@@ -144,7 +149,7 @@ def get_data_of_poly_roots_static_speed(testing_polynomials = None , steps_taken
                                                           stop_when_no_progress = stop_when_no_progress , debug = debug)
         poly_root.associate_with_real_root(polynomial.get_closest_exact_root(poly_root.x_value))
 
-        if poly_root.root_was_found or poly_root.failure_reason == CalculatedRoot.FAILURES.HIT_STEP_LIMIT:
+        if poly_root.root_was_found or poly_root.failure_reason == NewtonResult.FAILURES.HIT_STEP_LIMIT:
             if debug and poly_root.root_was_found:
                 print("FOUND - {}".format(poly_root))
             x_error_magnitude = math.log10(poly_root.x_error) if poly_root.x_error != 0 else ZERO_ERROR_MAGNITUDE
@@ -160,13 +165,12 @@ def get_data_of_poly_roots_static_speed(testing_polynomials = None , steps_taken
                 result_y_precision.append(-ZERO_ERROR_MAGNITUDE)
             else:
                 result_y_precision.append(-y_error_magnitude)
-        elif poly_root.failure_reason == CalculatedRoot.FAILURES.HORIZONTAL:
+        elif poly_root.failure_reason == NewtonResult.FAILURES.HORIZONTAL:
             zero_derivative_fail_count += 1
-        elif poly_root.failure_reason == CalculatedRoot.FAILURES.NO_PROGRESS:
-            no_progress_fail_count += 1
 
         if poly_root.first_step_with_no_progress is not None:
             first_step_without_progress.append(poly_root.first_step_with_no_progress)
+            no_progress_fail_count += 1
             if poly_root.additional_steps_taken is not None:
                 additional_steps_until_progress.append(poly_root.additional_steps_taken)
     if len(first_step_without_progress) == 0:
@@ -190,7 +194,7 @@ def static_accuracy_chart(num_observations = None, poly_degrees = None , epsilon
     :type no_progress_threshold: float
     :param stop_when_no_progress: if False (default), the first step at which delta-x between steps is less than
         no_progress_threshold will be recorded but no action taken. If True, then the root will be returned failed
-        because of CalculatedRoot.FAILURES.NO_PROGRESS when delta-x is less than no_progress_threshold
+        because of NewtonResult.FAILURES.NO_PROGRESS when delta-x is less than no_progress_threshold
     :param debug: whether informational/debugging strings will be printed (some (mostly error/failure case ones)
         will still be printed even if set to false)
     """
@@ -306,7 +310,7 @@ def static_speed_chart(num_observations = None, poly_degrees = None , max_steps 
     :type no_progress_threshold: float
     :param stop_when_no_progress: if False (default), the first step at which delta-x between steps is less than
         no_progress_threshold will be recorded but no action taken. If True, then the root will be returned failed
-        because of CalculatedRoot.FAILURES.NO_PROGRESS when delta-x is less than no_progress_threshold
+        because of NewtonResult.FAILURES.NO_PROGRESS when delta-x is less than no_progress_threshold
     :param debug: whether informational/debugging strings will be printed (some (mostly error/failure case ones)
         will still be printed even if set to false)
     """
@@ -419,11 +423,11 @@ epsilons = [1e-3 , 5e-4 , 1e-4 , 5e-5 , 1e-5 , 5e-6 , 1e-6 , 5e-7 , 1e-7 , 5e-8 
 max_steps_list = [3 , 4 , 5 , 6 , 7 , 8 , 16 , 32 , 64 , 128 , 256 , 512 , 1024 , 2048 , 4096]
 chart_only_int_roots = False
 
-static_speed_results = static_speed_chart(num_observations = sample_size , poly_degrees = poly_degrees , max_steps = max_steps_list , only_int_roots = chart_only_int_roots , human_dividing = False , stop_when_no_progress = False , no_progress_threshold = 1e-12)
-save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/final_static_speed_chart1.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
-input("Press Enter to continue...")
 static_accuracy_results = static_accuracy_chart(num_observations = sample_size , poly_degrees = poly_degrees , epsilons = epsilons , only_int_roots = chart_only_int_roots , human_dividing = False , debug = False)
-save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/final_static_accuracy_chart-int_roots1.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/final_static_accuracy_chart2.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+static_speed_results = static_speed_chart(num_observations = sample_size , poly_degrees = poly_degrees , max_steps = max_steps_list , only_int_roots = chart_only_int_roots , human_dividing = False , stop_when_no_progress = False , no_progress_threshold = 1e-12)
+save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/final_static_speed_chart2.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+input("Press Enter to continue...")
 
 
 # print(get_data_of_poly_roots_static_speed(500 , 10 , 32))

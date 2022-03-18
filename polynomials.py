@@ -29,8 +29,8 @@ def wrap_float(f):
     return longdouble(f)
 
 
-class CalculatedRoot:
-    """A calculated root"""
+class NewtonResult:
+    """A root approximation from Newton's Method"""
 
     class FAILURES(Enum):
         HORIZONTAL = 0
@@ -97,6 +97,8 @@ class Polynomial:
         self.save_reason = None
 
     def __eq__(self, other):
+        """Two polynomials with the same coefficients are the same and therefore have the same roots.
+        Roots can't be compared because we don't always know them and because x ≠ 2x ≠ x^4 etc."""
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
@@ -175,9 +177,9 @@ class Polynomial:
 
     def multiply(self , polynomial_second = None):
         """
-        Multiplies two polynomials' coefficients with each other.
+        Multiplies two polynomials' with each other.
 
-        :param polynomial_second: coefficients of a second polynomial (default is [1] (function returns polynomial_first))
+        :param polynomial_second: a second polynomial (default is Polynomial([1]) (function returns polynomial_first)) (roots are not necessary, but will be combined in result if provided)
         :type polynomial_second: Polynomial
         :returns: new Polynomial (the multiplication product)
         """
@@ -197,10 +199,7 @@ class Polynomial:
         result_degree = self.poly_degree + polynomial_second.get_degree()
         result_coefficients_list = [0] * (result_degree + 1)  # read docstring
         # make result lists long enough to avoid IndexError: list assignment index out of range
-        if self.poly_roots is not None and polynomial_second.poly_roots is not None:
-            result_roots = self.poly_roots + polynomial_second.poly_roots
-        else:
-            result_roots = None
+        result_roots = self.poly_roots + polynomial_second.poly_roots if self.poly_roots is not None and polynomial_second.poly_roots is not None else None
 
         for first_poly_pos in range(len(self.poly_coefficients_list)):
             # distribute current component of poly_a into poly_b
@@ -406,10 +405,10 @@ class Polynomial:
         :type no_progress_threshold: float
         :param stop_when_no_progress: if False (default), the first step at which delta-x between steps is less than
             no_progress_threshold will be recorded but no action taken. If True, then the root will be returned failed
-            because of CalculatedRoot.FAILURES.NO_PROGRESS when delta-x is less than no_progress_threshold
+            because of NewtonResult.FAILURES.NO_PROGRESS when delta-x is less than no_progress_threshold
         :param debug: whether informational/debugging strings will be printed (some (mostly error/failure case ones)
             will still be printed even if set to false)
-        :return: CalculatedRoot
+        :return: NewtonResult
         """
 
         guess_history = []
@@ -429,10 +428,10 @@ class Polynomial:
 
             new_guess_tangent = self.get_tangent_line(current_guess)
             if new_guess_tangent.poly_roots is None:
-                return CalculatedRoot(current_guess, current_value, step_number, starting_x,
-                                      guess_history = guess_history, root_was_found = False,
-                                      failure_reason = CalculatedRoot.FAILURES.HORIZONTAL,
-                                      first_step_with_no_progress = first_step_with_no_progress)
+                return NewtonResult(current_guess , current_value , step_number , starting_x ,
+                                    guess_history = guess_history , root_was_found = False ,
+                                    failure_reason = NewtonResult.FAILURES.HORIZONTAL ,
+                                    first_step_with_no_progress = first_step_with_no_progress)
             new_guess = new_guess_tangent.poly_roots[0]  # new_guess = x_intercept of tangent line
 
             # default isclose value is 1e-9 (a billionth)
@@ -452,10 +451,10 @@ class Polynomial:
                     if stop_when_no_progress:
                         if debug:
                             print("Search ended.")
-                        return CalculatedRoot(current_guess, current_value, step_number, starting_x,
-                                              guess_history = guess_history, root_was_found = False,
-                                              failure_reason = CalculatedRoot.FAILURES.NO_PROGRESS,
-                                              first_step_with_no_progress = first_step_with_no_progress)
+                        return NewtonResult(current_guess , current_value , step_number , starting_x ,
+                                            guess_history = guess_history , root_was_found = False ,
+                                            failure_reason = NewtonResult.FAILURES.NO_PROGRESS ,
+                                            first_step_with_no_progress = first_step_with_no_progress)
             current_guess = new_guess
             current_value = self.evaluate(current_guess)
             guess_history.append(current_guess)
@@ -474,21 +473,21 @@ class Polynomial:
                 if debug:
                     print("!!POWERED THROUGH!! Extra steps={} total steps={} (x,y)=({:.5e},{:.5e}). Poly: {}".format(
                         additional_steps_taken , step_number , current_guess , current_value , self))
-                return CalculatedRoot(current_guess , current_value , step_number , starting_x,
-                                      guess_history = guess_history,
-                                      first_step_with_no_progress = first_step_with_no_progress,
-                                      additional_steps_taken = additional_steps_taken)
-            return CalculatedRoot(current_guess , current_value , step_number , starting_x,
-                                  guess_history = guess_history,
-                                  first_step_with_no_progress = first_step_with_no_progress)
+                return NewtonResult(current_guess , current_value , step_number , starting_x ,
+                                    guess_history = guess_history ,
+                                    first_step_with_no_progress = first_step_with_no_progress ,
+                                    additional_steps_taken = additional_steps_taken)
+            return NewtonResult(current_guess , current_value , step_number , starting_x ,
+                                guess_history = guess_history ,
+                                first_step_with_no_progress = first_step_with_no_progress)
         else:
             if debug:
                 print("Failed to find root after {} steps. Search ended at x={:.5e} where y={:.5e}. Poly: {}".format(
                     step_number, current_guess, current_value, self))
-            return CalculatedRoot(current_guess , current_value , step_number , starting_x ,
-                                  guess_history = guess_history , root_was_found = False ,
-                                  failure_reason = CalculatedRoot.FAILURES.HIT_STEP_LIMIT,
-                                  first_step_with_no_progress = first_step_with_no_progress)
+            return NewtonResult(current_guess , current_value , step_number , starting_x ,
+                                guess_history = guess_history , root_was_found = False ,
+                                failure_reason = NewtonResult.FAILURES.HIT_STEP_LIMIT ,
+                                first_step_with_no_progress = first_step_with_no_progress)
 
     def get_roots(self , max_steps = 20 , epsilon = 1e-8 , starting_guess_count = None ,
                   random_starting_guesses = True , guess_range_min = -BUILD_BINOMIAL_RANGE - 1,
@@ -510,7 +509,7 @@ class Polynomial:
         :type guess_range_max: float
         :param sort_roots: whether the final roots string will be sorted from most negative to most positive (default False)
         :type sort_roots: bool
-        :return: tuple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)]]
+        :return: tuple[list[NewtonResult (successful roots)] , list[NewtonResult (failed roots)]]
         """
 
         if starting_guess_count is None:
@@ -563,7 +562,7 @@ class Polynomial:
         :param human_dividing: whether the factored out roots will be the actual root (True) or the calculated one (False)
         :param debug: whether informational/debugging strings will be printed (some (mostly error/failure case ones)
             will still be printed even if set to false)
-        :return: triple[list[CalculatedRoot (successful roots)] , list[CalculatedRoot (failed roots)] , list[Polynomial (remainders)]]
+        :return: triple[list[NewtonResult (successful roots)] , list[NewtonResult (failed roots)] , list[Polynomial (remainders)]]
         """
 
         calculated_poly_roots_set = []
@@ -771,12 +770,12 @@ def root_rounder(unrounded_poly_roots):
     """
     Rounds a lot of roots
 
-    :type unrounded_poly_roots: list[CalculatedRoot]
+    :type unrounded_poly_roots: list[NewtonResult]
     :return:
     """
 
-    rounded_poly_roots = map(lambda root : CalculatedRoot(float("{:.3f}".format(root.x_value)) , root.y_value ,
-                                                            root.steps_taken , root.starting_guess , root.root_was_found) , unrounded_poly_roots)
+    rounded_poly_roots = map(lambda root : NewtonResult(float("{:.3f}".format(root.x_value)) , root.y_value ,
+                                                        root.steps_taken , root.starting_guess , root.root_was_found) , unrounded_poly_roots)
     return rounded_poly_roots
 
 
