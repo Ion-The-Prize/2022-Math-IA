@@ -12,57 +12,102 @@ from numpy import longdouble
 from math import isclose
 from enum import Enum
 
+import sympy as sy
+
 import mplcursors
 
 # constants
 BUILD_BINOMIAL_RANGE = 10
 
-
-def fmult(a,b):
-    return a*b
-
-def fdiv(a,b):
-    return a/b
-
-def fpow(a,b):
-    return pow(a,b)
-
-def fadd(a,b):
-    return a+b
-
-def fsubt(a,b):
-    return a-b
-
-def fstr(f, num_decimal_places = 6):
+def normal_float_str(f, num_decimal_places):
     format_string = "{:."+str(num_decimal_places)+"g}"
     return format_string.format(f).rstrip('0').rstrip('.')
+
+
+def fmult(a,b):
+    return sy.Mul(a,b)
+
+def fdiv(a,b):
+    return sy.Rational(a,b)
+
+def fpow(a,b):
+    return sy.Pow(a,b)
+
+def fadd(a,b):
+    return sy.Add(a,b)
+
+def fsubt(a,b):
+    return sy.Add(a, sy.Mul(-1,b))
+
+def fstr(f, num_decimal_places = 6):
+    # If there are lots of zeros after the whole number, we'll print
+    # them separately so we don't lose the tiny decimals
+    integer_part=round(f)
+    fraction_part=float(f - integer_part)
+
+    # if the fraction part is tiny (but not zero), separate it out
+    if fraction_part == 0:
+        return str(integer_part)
+
+    # if the fraction part is tiny tiny
+    if integer_part != 0 and math.fabs(fraction_part) < 0.0001:
+        if fraction_part > 0:
+            # need to add + sign to output
+            result = "({}+{:.6e})".format(integer_part, fraction_part)
+        else:
+            # minus sign is already a part of fraction_part
+            result = "({}{:.6e})".format(integer_part, fraction_part)
+    else:
+        result = "{:.6g}".format(float(f))
+    #format_string = "{:."+str(num_decimal_places)+"g}"
+    #return format_string.format(f).rstrip('0').rstrip('.')
     # return mp.nstr(f, num_decimal_places)
+    result = result.rstrip('0').rstrip('.')
+    if len(result)==0:
+        return "0"
+    else:
+        return result
 
 def fabs(f):
-    return math.fabs(f)
+    return sy.Abs(f)
 
 
 def wrap_float(f):
     """
     All math-relevant floats are run through here to, perhaps, upgrade them to numpy.longdouble
     """
-    return np.longdouble(f)
+    #return np.longdouble(f)
+    return sy.Float(f,75)
+
+def unwrap_float(f):
+    return float(f)
 
 def fisclose(a,b, rel_tol=None, abs_tol=None):
-    if rel_tol is not None and abs_tol is not None:
-        return isclose(a,b,rel_tol=rel_tol, abs_tol=abs_tol)
+    diff = fabs(fsubt(a,b))
+
     if rel_tol is not None:
-        return isclose(a,b, rel_tol=rel_tol)
+        return not fisgreater(sy.simplify(diff), rel_tol)
     elif abs_tol is not None:
-        return isclose(a,b, abs_tol=abs_tol)
+        return not fisgreater(sy.simplify(diff), abs_tol)
     else:
-        return isclose(a,b)
+        return not fisgreater(sy.simplify(diff), 1e-9)
+
+    # if rel_tol is not None and abs_tol is not None:
+    #   return isclose(a,b,rel_tol=rel_tol, abs_tol=abs_tol)
+    # elif rel_tol is not None:
+    #     return isclose(a,b, rel_tol=rel_tol)
+    # elif abs_tol is not None:
+    #     return isclose(a,b, abs_tol=abs_tol)
+    # else:
+    #     return isclose(a,b)
 
 def fisgreater(a,b):
-    return a>b
+    return sy.GreaterThan(a,b)
+    #return a>b
 
 def fcopysign(a,b):
-    return math.copysign(a,b)
+    return sy.Mul(sy.sign(a), b)
+    #return math.copysign(a,b)
 
 def frandom(min, max):
     return fadd(min, fmult(fsubt(max, min), random.random()))
@@ -76,28 +121,28 @@ class NewtonResult:
         HIT_STEP_LIMIT = 2
 
     def __init__(self , x_value , y_value , steps_taken , starting_guess , guess_history = None, root_was_found = True, failure_reason = None , first_step_with_no_progress = None , additional_steps_taken = None):
-        self.x_value = x_value
-        self.y_value = y_value
+        self.x_value = unwrap_float(x_value)
+        self.y_value = unwrap_float(y_value)
         self.steps_taken = steps_taken
-        self.guess_history = guess_history
-        self.starting_guess = starting_guess
+        self.guess_history = [unwrap_float(f) for f in guess_history]
+        self.starting_guess = unwrap_float(starting_guess)
         self.root_was_found = root_was_found
         self.failure_reason = failure_reason
         self.associated_real_root = None
         self.x_error = None
-        self.y_error = fabs(y_value)
+        self.y_error = unwrap_float(fabs(y_value))
         self.first_step_with_no_progress = first_step_with_no_progress
         self.additional_steps_taken = additional_steps_taken
 
     def __repr__(self):
         if self.root_was_found:
             return "x={} y={} {} ({:d} steps from {})".format(
-                fstr(self.x_value, 5) , fstr(self.y_value, 3),
-                "closest root={} err={}".format(fstr(self.associated_real_root), fstr(self.x_error)) if self.x_error is not None else "" ,
+                normal_float_str(self.x_value, 5) , normal_float_str(self.y_value, 3),
+                "closest root={} err={}".format(normal_float_str(self.associated_real_root), normal_float_str(self.x_error)) if self.x_error is not None else "" ,
                 self.steps_taken ,
-                fstr(self.starting_guess, 5))
+                normal_float_str(self.starting_guess, 5))
         else:
-            return "FAIL ({}): (x,y)=({}, {})({:d} steps from {})".format(self.failure_reason, fstr(self.x_value, 3), fstr(self.y_value, 3), self.steps_taken, fstr(self.starting_guess, 3))
+            return "FAIL ({}): (x,y)=({}, {})({:d} steps from {})".format(self.failure_reason, normal_float_str(self.x_value, 3), normal_float_str(self.y_value, 3), self.steps_taken, normal_float_str(self.starting_guess, 3))
 
     def __str__(self):
         return self.__repr__()
@@ -106,9 +151,8 @@ class NewtonResult:
         return self.root_was_found
 
     def associate_with_real_root(self, real_root):
-        self.associated_real_root = real_root
-        self.x_error = fabs(fsubt(self.associated_real_root, self.x_value))
-        self.x_error = fabs(self.x_error)
+        self.associated_real_root = unwrap_float(real_root)
+        self.x_error = unwrap_float(fabs(fsubt(real_root, self.x_value)))
 
 
 class Polynomial:
@@ -140,7 +184,7 @@ class Polynomial:
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
-        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots) + '::' + (" reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "")
+        return self.poly_printer() + ':: [' + ", ".join([fstr(c) for c in self.poly_coefficients_list]) + ']:: [' + ", ".join([fstr(r) for r in self.poly_roots]) + ' ]::' + (" reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "")
 
     def save_polynomial(self, reason):
         """:type reason: str"""
@@ -193,9 +237,10 @@ class Polynomial:
                     coefficient_string = ""
                 else:
                     if coeff_format is not None:
-                        coefficient_string = coeff_format.format(abs(coefficient))
+                        coefficient_string = fstr(fabs(coefficient))
+                        #coefficient_string = coeff_format.format(abs(coefficient))
                     else:
-                        coefficient_string = fstr(abs(coefficient))
+                        coefficient_string = fstr(fabs(coefficient))
 
                 if power == 0:
                     result += "{}".format(coefficient_string)  # formats coeff as number
@@ -486,8 +531,8 @@ class Polynomial:
                     if first_step_with_no_progress is None:
                         if debug:
                             print(
-                                "Failed to make progress on finding root after {} steps at x={:.5e} where y={:.5e}. Last update was {:.5e}. Poly: {}".format(
-                                    step_number , current_guess , current_value , fsubt(current_guess, new_guess), self))
+                                "Failed to make progress on finding root after {} steps at x={} where y={}. Last update was {}. Poly: {}".format(
+                                    step_number , fstr(current_guess,5) , fstr(current_value,5) , fstr(fsubt(current_guess, new_guess),5), self))
                         first_step_with_no_progress = step_number
                     else:
                         steps_without_progress += 1
@@ -504,18 +549,19 @@ class Polynomial:
 
             if debug or (self.get_degree() == 1 and step_number == 5):
                 # If the degree is 1, it should have converged long before getting to step 5
-                print("Updating guess for {} time: from ({:g}+{:.12g} , {:.5g}) to ({:.5g} , {:.5g}) [delta_x={:e}] :: was notclose[{:e}]:: poly={} tangent={}"
-                      .format(step_number, np.trunc(previous_guess), fsubt(previous_guess,np.trunc(previous_guess)), previous_value, current_guess, current_value, fsubt(current_guess,previous_guess), epsilon,  self, new_guess_tangent.poly_printer(coeff_format = "{}")))
+                print("Updating guess for {} time: from ({}, {}) to ({} , {}) [delta_x={}] :: was notclose[{}]:: poly={} tangent={}"
+                      .format(step_number, fstr(previous_guess,12), fstr(previous_value,12),
+                              fstr(current_guess), fstr( current_value), fstr(fsubt(current_guess,previous_guess)), fstr(epsilon),  self, new_guess_tangent.poly_printer(coeff_format = "{}")))
         if fisclose(current_value, 0, abs_tol = epsilon):
             if debug:
-                print("Found root after {} steps at x={:.5e} where y={:.5e}. Poly: {}".format(
-                    step_number, current_guess, current_value, self))
+                print("Found root after {} steps at x={} where y={}. Poly: {}".format(
+                    step_number, fstr(current_guess, 5), fstr(current_value, 5), self))
             if first_step_with_no_progress is not None:
                 # It pushed through no_progress and eventually found a root
                 additional_steps_taken = 1 + step_number - first_step_with_no_progress
                 if debug:
-                    print("!!POWERED THROUGH!! Extra steps={} total steps={} (x,y)=({:.5e},{:.5e}). Poly: {}".format(
-                        additional_steps_taken , step_number , current_guess , current_value , self))
+                    print("!!POWERED THROUGH!! Extra steps={} total steps={} (x,y)=({},{}). Poly: {}".format(
+                        additional_steps_taken , step_number , fstr(current_guess) , fstr(current_value) , self))
                 return NewtonResult(current_guess , current_value , step_number , starting_x ,
                                     guess_history = guess_history ,
                                     first_step_with_no_progress = first_step_with_no_progress ,
@@ -774,7 +820,7 @@ def randomly_build_a_binomial(rand_lower_bound = -BUILD_BINOMIAL_RANGE , rand_up
         while denominator == 0:
             denominator = random.randrange(rand_lower_bound , rand_upper_bound + 1)
 
-        root = fadd(position, fdiv(numerator, denominator))
+        root = fdiv(numerator+position*denominator, denominator)
         result = Polynomial([fmult(-root, denominator) , denominator] , [root])
         return result
 
@@ -838,8 +884,8 @@ class ZoomPlot:
         if polynomial.poly_roots is not None:
             sorted_roots = polynomial.poly_roots.copy()
             sorted_roots.sort()
-            self.xmin = sorted_roots[0] - .1
-            self.xmax = sorted_roots[-1] + .1
+            self.xmin = float(sorted_roots[0]) - .1
+            self.xmax = float(sorted_roots[-1]) + .1
 
         else:
             self.xmin = -10
@@ -872,7 +918,7 @@ class ZoomPlot:
 
     def plot(self):
         print("Plotting from {} to {}".format(fstr(self.xmin, 2), fstr(self.xmax, 2)))
-        x = np.linspace(self.xmin, self.xmax, self.resolution)
+        x = np.linspace(self.xmin, self.xmax, self.resolution, dtype=float)
         y = self.polynomial.evaluate_array(x)
         if self.colorize_points_with_newton_root:
             point_colors = []
