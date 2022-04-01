@@ -11,6 +11,7 @@ import numpy as np
 from numpy import longdouble
 from math import isclose
 from enum import Enum
+import mpmath as mp
 
 import mplcursors
 
@@ -18,15 +19,18 @@ import mplcursors
 BUILD_BINOMIAL_RANGE = 10
 
 
-def floatToString(f, format_string="{:.6f}"):
-    return format_string.format(f).rstrip('0').rstrip('.')
+def floatToString(f, num_decimal_places = 6):
+    # format_string = "{:.6f}"
+    # return format_string.format(f).rstrip('0').rstrip('.')
+    return mp.nstr(f, num_decimal_places)
 
 
+mp.dps = 100
 def wrap_float(f):
     """
     All math-relevant floats are run through here to, perhaps, upgrade them to numpy.longdouble
     """
-    return longdouble(f)
+    return mp.mpf(f)
 
 
 class NewtonResult:
@@ -53,13 +57,13 @@ class NewtonResult:
 
     def __repr__(self):
         if self.root_was_found:
-            return "x={:.5e} y={:.3e} {} ({:d} steps from {:.5e})".format(
-                self.x_value , self.y_value ,
-                "closest root={:g} err={:g}".format(self.associated_real_root , self.x_error) if self.x_error is not None else "" ,
+            return "x={} y={} {} ({:d} steps from {})".format(
+                floatToString(self.x_value , 5) , floatToString(self.y_value , 3),
+                "closest root={} err={}".format(floatToString(self.associated_real_root) , floatToString(self.x_error)) if self.x_error is not None else "" ,
                 self.steps_taken ,
-                self.starting_guess)
+                floatToString(self.starting_guess , 5))
         else:
-            return "FAIL ({}): (x,y)=({:.3f}, {:.3e})({:d} steps from {:.3f})".format(self.failure_reason, self.x_value , self.y_value , self.steps_taken , self.starting_guess)
+            return "FAIL ({}): (x,y)=({}, {})({:d} steps from {})".format(self.failure_reason, floatToString(self.x_value , 3) , floatToString(self.y_value, 3) , self.steps_taken , floatToString(self.starting_guess,3))
 
     def __str__(self):
         return self.__repr__()
@@ -285,7 +289,9 @@ class Polynomial:
         result = wrap_float(0.0)
 
         for i in range(len(self.poly_coefficients_list)):
-            result += self.poly_coefficients_list[i] * (x ** i)
+            delta = self.poly_coefficients_list[i] * (x ** i)
+            #print(type(delta))
+            result += delta
         return result
 
     def evaluate_array(self, x):
@@ -416,6 +422,8 @@ class Polynomial:
         current_guess = wrap_float(starting_x)
         current_value = self.evaluate(current_guess)
         guess_history.append(current_guess)
+        minimum_adjustment = wrap_float(minimum_adjustment) if minimum_adjustment is not None else None
+        no_progress_threshold = wrap_float(no_progress_threshold)
         step_number = 0
         first_step_with_no_progress = None
         steps_without_progress = 0
@@ -461,8 +469,8 @@ class Polynomial:
 
             if debug or (self.get_degree() == 1 and step_number == 5):
                 # If the degree is 1, it should have converged long before getting to step 5
-                print("Updating guess for {} time: from ({:.5g} , {:.5g}) to ({:.5g} , {:.5g}) [delta_x={:e}] :: was notclose[{:e}]:: poly={} tangent={}"
-                      .format(step_number, previous_guess, previous_value, current_guess, current_value, current_guess-previous_guess, epsilon,  self, new_guess_tangent.poly_printer(coeff_format = "{}")))
+                print("Updating guess for {} time: from ({:g}+{:.12g} , {:.5g}) to ({:.5g} , {:.5g}) [delta_x={:e}] :: was notclose[{:e}]:: poly={} tangent={}"
+                      .format(step_number, np.trunc(previous_guess), previous_guess - np.trunc(previous_guess), previous_value, current_guess, current_value, current_guess-previous_guess, epsilon,  self, new_guess_tangent.poly_printer(coeff_format = "{}")))
         if isclose(current_value, 0, abs_tol = epsilon):
             if debug:
                 print("Found root after {} steps at x={:.5e} where y={:.5e}. Poly: {}".format(
@@ -631,7 +639,7 @@ class Polynomial:
         for i in range(power):
             current_answer = current_answer.multiply(self)
             if pascal:
-                print(i ,
+                print((i + 1) ,
                       current_answer.poly_coefficients_list)  # numbers rows of pascal's triangle as degree of poly from a binomial (so [1 2 1] is row 2)
         return current_answer
 
@@ -650,7 +658,7 @@ class Polynomial:
 
         assert (maximum > minimum)
         poly_barcode = BarCode("{:s} | Roots @x = {:s}".format(self.poly_printer(), ",".join(
-            ["{:.3f}".format(r) for r in sorted(self.poly_roots)]))
+            [floatToString(r, 3) for r in sorted(self.poly_roots)]))
                                , minimum, maximum, window_width, 200, self.poly_degree + 1)
         poly_barcode.close_on_click()
 
@@ -667,7 +675,7 @@ class Polynomial:
             i += 1
             if i % 100 == 0:
                 poly_barcode.draw()
-            root = self.get_newton_root_from_point(starting_x=x, max_steps=128, epsilon=epsilon)
+            root = self.get_newton_root_from_point(starting_x=x, max_steps=128, epsilon=epsilon, minimum_adjustment = 1e-8)
             print("Newton Result: ", root)
             if root.root_was_found:
                 # Looking for what color the root bar should be
@@ -821,14 +829,14 @@ class ZoomPlot:
         return self.xmin - 0.05*x_range <= x <= self.xmax + 0.05*x_range
 
     def plot(self):
-        print("Plotting from {:.2f} to {:.2f}".format(self.xmin, self.xmax))
+        print("Plotting from {} to {}".format(floatToString(self.xmin,2), floatToString(self.xmax,2)))
         x = np.linspace(self.xmin, self.xmax, self.resolution)
         y = self.polynomial.evaluate_array(x)
         if self.colorize_points_with_newton_root:
             point_colors = []
             for x_val in x:
                 # This is coloring point. We could also color the background: https://stackoverflow.com/a/9957832
-                newton_result = self.polynomial.get_newton_root_from_point(x_val, max_steps = 50)
+                newton_result = self.polynomial.get_newton_root_from_point(x_val, max_steps = 50, epsilon = 5e-8, minimum_adjustment = 1e-8)
                 if newton_result.root_was_found:
                     exact_root = self.polynomial.get_closest_exact_root(newton_result.x_value)
                     point_colors.append(self.color_assignments.get_color(exact_root))
@@ -855,11 +863,11 @@ class ZoomPlot:
 
             poly_y_value_at_tangent_x_intercept = self.polynomial.evaluate(tangent_x_intercept)
 
-            newton_result = self.polynomial.get_newton_root_from_point(x, max_steps = 50)
+            newton_result = self.polynomial.get_newton_root_from_point(x, max_steps = 50, epsilon = 5e-8, minimum_adjustment = 1e-8)
 
-            sel.annotation.set(text="Point ({:.4g} , {:.4g})\nslope={:.3g}\ntangent line: {:s} (x-intercept {:.3g})\npoly({:.3g})={:.4g})\noverall newton result: {}". format(
-                x,y,slope, tangent_line.poly_printer(coeff_format="{:.3g}"),
-                tangent_x_intercept, tangent_x_intercept, poly_y_value_at_tangent_x_intercept, newton_result))
+            sel.annotation.set(text="Point ({} , {})\nslope={}\ntangent line: {:s} (x-intercept {})\npoly({})={})\noverall newton result: {}". format(
+                floatToString(x,4),floatToString(y,4),floatToString(slope,3), tangent_line.poly_printer(coeff_format="{:.3g}"),
+                floatToString(tangent_x_intercept,3), floatToString(tangent_x_intercept,3), floatToString(poly_y_value_at_tangent_x_intercept,4), newton_result))
             #sel.annotation.set(text=tt[sel.target.index])
 
         self.ax.yaxis.grid(True)
