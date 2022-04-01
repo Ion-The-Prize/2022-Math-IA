@@ -11,7 +11,6 @@ import numpy as np
 from numpy import longdouble
 from math import isclose
 from enum import Enum
-import mpmath as mp
 
 import mplcursors
 
@@ -19,18 +18,35 @@ import mplcursors
 BUILD_BINOMIAL_RANGE = 10
 
 
-def floatToString(f, num_decimal_places = 6):
-    # format_string = "{:.6f}"
-    # return format_string.format(f).rstrip('0').rstrip('.')
-    return mp.nstr(f, num_decimal_places)
+def fmult(a,b):
+    return a*b
+
+def fdiv(a,b):
+    return a/b
+
+def fpow(a,b):
+    return pow(a,b)
+
+def fadd(a,b):
+    return a+b
+
+def fsubt(a,b):
+    return a-b
+
+def fstr(f, num_decimal_places = 6):
+    format_string = "{:."+str(num_decimal_places)+"g}"
+    return format_string.format(f).rstrip('0').rstrip('.')
+    # return mp.nstr(f, num_decimal_places)
+
+def fabs(f):
+    return math.fabs(f)
 
 
-mp.dps = 100
 def wrap_float(f):
     """
     All math-relevant floats are run through here to, perhaps, upgrade them to numpy.longdouble
     """
-    return mp.mpf(f)
+    return np.longdouble(f)
 
 
 class NewtonResult:
@@ -58,12 +74,12 @@ class NewtonResult:
     def __repr__(self):
         if self.root_was_found:
             return "x={} y={} {} ({:d} steps from {})".format(
-                floatToString(self.x_value , 5) , floatToString(self.y_value , 3),
-                "closest root={} err={}".format(floatToString(self.associated_real_root) , floatToString(self.x_error)) if self.x_error is not None else "" ,
+                fstr(self.x_value, 5) , fstr(self.y_value, 3),
+                "closest root={} err={}".format(fstr(self.associated_real_root), fstr(self.x_error)) if self.x_error is not None else "" ,
                 self.steps_taken ,
-                floatToString(self.starting_guess , 5))
+                fstr(self.starting_guess, 5))
         else:
-            return "FAIL ({}): (x,y)=({}, {})({:d} steps from {})".format(self.failure_reason, floatToString(self.x_value , 3) , floatToString(self.y_value, 3) , self.steps_taken , floatToString(self.starting_guess,3))
+            return "FAIL ({}): (x,y)=({}, {})({:d} steps from {})".format(self.failure_reason, fstr(self.x_value, 3), fstr(self.y_value, 3), self.steps_taken, fstr(self.starting_guess, 3))
 
     def __str__(self):
         return self.__repr__()
@@ -106,7 +122,7 @@ class Polynomial:
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
-        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots) + '::' + (" reason for saving: {}".format(self.save_reason) if self.save_reason is not None else " Not saved")
+        return self.poly_printer() + '::' + str(self.poly_coefficients_list) + '::' + str(self.poly_roots) + '::' + (" reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "")
 
     def save_polynomial(self, reason):
         """:type reason: str"""
@@ -160,7 +176,7 @@ class Polynomial:
                     if coeff_format is not None:
                         coefficient_string = coeff_format.format(abs(coefficient))
                     else:
-                        coefficient_string = floatToString(abs(coefficient))
+                        coefficient_string = fstr(abs(coefficient))
 
                 if power == 0:
                     result += "{}".format(coefficient_string)  # formats coeff as number
@@ -658,7 +674,7 @@ class Polynomial:
 
         assert (maximum > minimum)
         poly_barcode = BarCode("{:s} | Roots @x = {:s}".format(self.poly_printer(), ",".join(
-            [floatToString(r, 3) for r in sorted(self.poly_roots)]))
+            [fstr(r, 3) for r in sorted(self.poly_roots)]))
                                , minimum, maximum, window_width, 200, self.poly_degree + 1)
         poly_barcode.close_on_click()
 
@@ -829,7 +845,7 @@ class ZoomPlot:
         return self.xmin - 0.05*x_range <= x <= self.xmax + 0.05*x_range
 
     def plot(self):
-        print("Plotting from {} to {}".format(floatToString(self.xmin,2), floatToString(self.xmax,2)))
+        print("Plotting from {} to {}".format(fstr(self.xmin, 2), fstr(self.xmax, 2)))
         x = np.linspace(self.xmin, self.xmax, self.resolution)
         y = self.polynomial.evaluate_array(x)
         if self.colorize_points_with_newton_root:
@@ -866,8 +882,8 @@ class ZoomPlot:
             newton_result = self.polynomial.get_newton_root_from_point(x, max_steps = 50, epsilon = 5e-8, minimum_adjustment = 1e-8)
 
             sel.annotation.set(text="Point ({} , {})\nslope={}\ntangent line: {:s} (x-intercept {})\npoly({})={})\noverall newton result: {}". format(
-                floatToString(x,4),floatToString(y,4),floatToString(slope,3), tangent_line.poly_printer(coeff_format="{:.3g}"),
-                floatToString(tangent_x_intercept,3), floatToString(tangent_x_intercept,3), floatToString(poly_y_value_at_tangent_x_intercept,4), newton_result))
+                fstr(x, 4),fstr(y, 4),fstr(slope, 3), tangent_line.poly_printer(coeff_format="{:.3g}"),
+                fstr(tangent_x_intercept, 3), fstr(tangent_x_intercept, 3), fstr(poly_y_value_at_tangent_x_intercept, 4), newton_result))
             #sel.annotation.set(text=tt[sel.target.index])
 
         self.ax.yaxis.grid(True)
@@ -951,7 +967,7 @@ class ZoomPlot:
 
 
 def graph(polynomial , x_min = None , x_max = None , x_resolution = 800, y_resolution=500):
-    print ("Plotting: {} (Roots: {})".format(polynomial, [floatToString(r, format_string="{:.3f}") for r in polynomial.poly_roots]))
+    print ("Plotting: {} (Roots: {})".format(polynomial, [fstr(r, format_string="{:.3f}") for r in polynomial.poly_roots]))
     # plt.style.use('_mpl-gallery')
 
     if polynomial.poly_roots is not None:
