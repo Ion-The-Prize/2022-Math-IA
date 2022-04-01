@@ -79,7 +79,7 @@ def get_data_of_poly_roots_static_accuracy(testing_polynomials = None , epsilon 
         """
         polynomial = testing_polynomials[i]  # "for polynomial in testing_polynomials" is not done so polynomials can be retried
         solved_completely , calculated_poly_roots_set , fail_roots , remainders = \
-            polynomial.get_roots_with_dividing(max_steps_per_root = 256 , epsilon = epsilon,
+            polynomial.get_roots_with_dividing(max_steps_per_root = 4096 , epsilon = epsilon,
                                                max_attempts_before_quitting = max_attempts_before_quitting,
                                                human_dividing = human_dividng , no_progress_threshold = no_progress_threshold,
                                                stop_when_no_progress = stop_when_no_progress , debug = debug)
@@ -406,16 +406,16 @@ def save_dataframes_to_tabs_of_file(df_dict, file_path, subcolumn_suffix_order =
     writer.save()
 
 
-sample_size = 512
+sample_size = 4
 poly_degrees = [2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10]
 epsilons = [1e-3 , 5e-4 , 1e-4 , 5e-5 , 1e-5 , 5e-6 , 1e-6 , 5e-7 , 1e-7 , 5e-8 , 1e-8 , 5e-9 , 1e-9 , 5e-10 , 1e-10]
 max_steps_list = [3 , 4 , 5 , 6 , 7 , 8 , 16 , 32 , 64 , 128 , 256 , 512 , 1024 , 2048 , 4096]
 chart_only_int_roots = False
 
 static_accuracy_results = static_accuracy_chart(num_observations = sample_size , poly_degrees = poly_degrees , epsilons = epsilons , only_int_roots = chart_only_int_roots , human_dividing = False , debug = False)
-save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/final_static_accuracy_chart2.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+save_dataframes_to_tabs_of_file(static_accuracy_results, r'/Temp/Math-IA/legacy_static_accuracy_chart.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
 static_speed_results = static_speed_chart(num_observations = sample_size , poly_degrees = poly_degrees , max_steps = max_steps_list , only_int_roots = chart_only_int_roots , human_dividing = False , stop_when_no_progress = False , no_progress_threshold = 1e-12)
-save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/final_static_speed_chart2.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
+save_dataframes_to_tabs_of_file(static_speed_results, r'/Temp/Math-IA/legacy_static_speed_chart.xlsx', subcolumn_suffix_order = ["ct" , "avg" , "std" , "min" , "max" , "25" , "50" , "75"])
 input("Press Enter to continue...")
 
 

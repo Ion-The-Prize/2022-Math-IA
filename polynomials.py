@@ -77,7 +77,7 @@ def wrap_float(f):
     All math-relevant floats are run through here to, perhaps, upgrade them to numpy.longdouble
     """
     #return np.longdouble(f)
-    return sy.Float(f,75)
+    return sy.Float(f,17)
 
 def unwrap_float(f):
     return float(f)
@@ -138,7 +138,7 @@ class NewtonResult:
         if self.root_was_found:
             return "x={} y={} {} ({:d} steps from {})".format(
                 normal_float_str(self.x_value, 5) , normal_float_str(self.y_value, 3),
-                "closest root={} err={}".format(normal_float_str(self.associated_real_root), normal_float_str(self.x_error)) if self.x_error is not None else "" ,
+                "closest root={} err={}".format(normal_float_str(self.associated_real_root, 5), normal_float_str(self.x_error, 5)) if self.x_error is not None else "" ,
                 self.steps_taken ,
                 normal_float_str(self.starting_guess, 5))
         else:
@@ -184,7 +184,8 @@ class Polynomial:
         return self.poly_coefficients_list == other.poly_coefficients_list
 
     def __repr__(self):
-        return self.poly_printer() + ':: [' + ", ".join([fstr(c) for c in self.poly_coefficients_list]) + ']:: [' + ", ".join([fstr(r) for r in self.poly_roots]) + ' ]::' + (" reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "")
+        roots = self.poly_roots if self.poly_roots is not None else []
+        return self.poly_printer() + ':: [' + ", ".join([fstr(c) for c in self.poly_coefficients_list]) + ']:: [' + ", ".join([fstr(r) for r in roots]) + ' ]::' + (" reason for saving: {}".format(self.save_reason) if self.save_reason is not None else "")
 
     def save_polynomial(self, reason):
         """:type reason: str"""
@@ -764,7 +765,7 @@ class Polynomial:
             if i % 100 == 0:
                 poly_barcode.draw()
             root = self.get_newton_root_from_point(starting_x=x, max_steps=128, epsilon=epsilon, minimum_adjustment = 1e-8)
-            print("Newton Result: ", root)
+            #print("Newton Result: ", root)
             if root.root_was_found:
                 # Looking for what color the root bar should be
                 closest_exact_root = self.get_closest_exact_root(root.x_value)
@@ -876,20 +877,29 @@ def root_rounder(unrounded_poly_roots):
 
 
 class ZoomPlot:
-    def __init__(self, polynomial, color_points_with_newton_root=False):
+    def __init__(self, polynomial, color_points_with_newton_root=False, xmin=None, xmax=None):
         self.polynomial = polynomial
         self.colorize_points_with_newton_root = color_points_with_newton_root
         self.color_assignments = MappedColorPalette(self.polynomial.poly_roots)
 
-        if polynomial.poly_roots is not None:
-            sorted_roots = polynomial.poly_roots.copy()
-            sorted_roots.sort()
-            self.xmin = float(sorted_roots[0]) - .1
-            self.xmax = float(sorted_roots[-1]) + .1
-
+        if xmin is None:
+            if polynomial.poly_roots is not None:
+                sorted_roots = polynomial.poly_roots.copy()
+                sorted_roots.sort()
+                self.xmin = float(sorted_roots[0]) - .1
+            else:
+                self.xmin = -10
         else:
-            self.xmin = -10
-            self.xmax = 10
+            self.xmin = xmin
+        if xmax is None:
+            if polynomial.poly_roots is not None:
+                sorted_roots = polynomial.poly_roots.copy()
+                sorted_roots.sort()
+                self.xmax = float(sorted_roots[-1]) + .1
+            else:
+                self.xmax = 10
+        else:
+            self.xmax = xmax
 
         self.orig_xmin = self.xmin
         self.orig_xmax = self.xmax
