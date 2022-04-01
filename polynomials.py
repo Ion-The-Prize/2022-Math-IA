@@ -48,6 +48,24 @@ def wrap_float(f):
     """
     return np.longdouble(f)
 
+def fisclose(a,b, rel_tol=None, abs_tol=None):
+    if rel_tol is not None and abs_tol is not None:
+        return isclose(a,b,rel_tol=rel_tol, abs_tol=abs_tol)
+    if rel_tol is not None:
+        return isclose(a,b, rel_tol=rel_tol)
+    elif abs_tol is not None:
+        return isclose(a,b, abs_tol=abs_tol)
+    else:
+        return isclose(a,b)
+
+def fisgreater(a,b):
+    return a>b
+
+def fcopysign(a,b):
+    return math.copysign(a,b)
+
+def frandom(min, max):
+    return fadd(min, fmult(fsubt(max, min), random.random()))
 
 class NewtonResult:
     """A root approximation from Newton's Method"""
@@ -67,7 +85,7 @@ class NewtonResult:
         self.failure_reason = failure_reason
         self.associated_real_root = None
         self.x_error = None
-        self.y_error = math.fabs(y_value)
+        self.y_error = fabs(y_value)
         self.first_step_with_no_progress = first_step_with_no_progress
         self.additional_steps_taken = additional_steps_taken
 
@@ -89,8 +107,8 @@ class NewtonResult:
 
     def associate_with_real_root(self, real_root):
         self.associated_real_root = real_root
-        self.x_error = math.fabs(self.associated_real_root - self.x_value)
-        self.x_error = math.fabs(self.x_error)
+        self.x_error = fabs(fsubt(self.associated_real_root, self.x_value))
+        self.x_error = fabs(self.x_error)
 
 
 class Polynomial:
@@ -130,7 +148,8 @@ class Polynomial:
 
     def is_imaginary(self):
         if self.get_degree() == 2:
-            discriminant = math.pow(self.poly_coefficients_list[1] , 2) - 4 * self.poly_coefficients_list[2] * self.poly_coefficients_list[0]
+            # From quadratic formula
+            discriminant = fpow(self.poly_coefficients_list[1] , 2) - 4 * self.poly_coefficients_list[2] * self.poly_coefficients_list[0]
             if discriminant < 0:
                 return True
             return False
@@ -159,7 +178,7 @@ class Polynomial:
         for i in range(len(reverse_poly_coefficients_list)):
             coefficient = reverse_poly_coefficients_list[i]
             power = self.poly_degree - i
-            if isclose(coefficient, 0):
+            if fisclose(coefficient, 0):
                 pass
             else:
                 if len(result) != 0:
@@ -170,7 +189,7 @@ class Polynomial:
                 else:
                     if coefficient < 0:
                         result += "-"
-                if isclose(abs(coefficient), 1) and power != 0:
+                if fisclose(abs(coefficient), 1) and power != 0:
                     coefficient_string = ""
                 else:
                     if coeff_format is not None:
@@ -225,11 +244,11 @@ class Polynomial:
             # distribute current component of poly_a into poly_b
             result_a = [0] * (polynomial_second.get_degree() + 1)  # read docstring
             for sec_poly_pos in range(len(polynomial_second.poly_coefficients_list)):
-                result_a[sec_poly_pos] = polynomial_second.poly_coefficients_list[sec_poly_pos] * self.poly_coefficients_list[first_poly_pos]
+                result_a[sec_poly_pos] = fmult(polynomial_second.poly_coefficients_list[sec_poly_pos], self.poly_coefficients_list[first_poly_pos])
                 # result_a = product of the sec_poly_pos'th coefficient of polynomial_second and every digit of polynomial_first
             for i in range(len(result_a)):
                 # add result_a to the currect part of running total
-                result_coefficients_list[first_poly_pos + i] += result_a[i]
+                result_coefficients_list[first_poly_pos + i] = fadd(result_coefficients_list[first_poly_pos + i], result_a[i])
         return Polynomial(result_coefficients_list , result_roots)
 
     def add(self , *other_polynomials):
@@ -242,7 +261,7 @@ class Polynomial:
                 if len(result_coefficients_list) <= poly_pos:
                     result_coefficients_list += [wrap_float(0)]
                 b = polynomial.poly_coefficients_list[poly_pos] if len(polynomial.poly_coefficients_list) > poly_pos else wrap_float(0)
-                result_coefficients_list[poly_pos] += b
+                result_coefficients_list[poly_pos] = fadd(result_coefficients_list[poly_pos], b)
         return Polynomial(result_coefficients_list)
 
     def subtract(self , subtracting_polynomial = None):
@@ -255,8 +274,8 @@ class Polynomial:
         for poly_pos in range(max(len(self.poly_coefficients_list) , len(subtracting_polynomial.poly_coefficients_list))):
             a = self.poly_coefficients_list[poly_pos] if len(self.poly_coefficients_list) > poly_pos else wrap_float(0)
             b = subtracting_polynomial.poly_coefficients_list[poly_pos] if len(subtracting_polynomial.poly_coefficients_list) > poly_pos else 0
-            result_coefficients_list += [a - b]
-        while len(result_coefficients_list) > 1 and isclose(result_coefficients_list[-1], 0):
+            result_coefficients_list += [fsubt(a,b)]
+        while len(result_coefficients_list) > 1 and fisclose(result_coefficients_list[-1], 0):
             del result_coefficients_list[-1]
         return Polynomial(result_coefficients_list)
 
@@ -277,7 +296,7 @@ class Polynomial:
         while (remainder_polynomial.get_degree()) >= divisor.get_degree():
             leading_term_coeff = remainder_polynomial.poly_coefficients_list[-1]
             leading_term_degree = remainder_polynomial.get_degree()
-            partial_quotient_coeff = float(leading_term_coeff / divisor.poly_coefficients_list[-1])  # worried about mixing int and float (despite doing it everywhere)
+            partial_quotient_coeff = fdiv(leading_term_coeff,divisor.poly_coefficients_list[-1])
             partial_quotient_degree = leading_term_degree - divisor.get_degree()
             partial_quotient_poly = build_a_monomial(partial_quotient_coeff , partial_quotient_degree)
             result = result.add(partial_quotient_poly)
@@ -305,7 +324,7 @@ class Polynomial:
         result = wrap_float(0.0)
 
         for i in range(len(self.poly_coefficients_list)):
-            delta = self.poly_coefficients_list[i] * (x ** i)
+            delta = fmult(self.poly_coefficients_list[i], fpow(x,i))
             #print(type(delta))
             result += delta
         return result
@@ -327,7 +346,7 @@ class Polynomial:
         result_coefficients_list = []
 
         for i in range(1 , len(self.poly_coefficients_list)):
-            result_coefficients_list.append(self.poly_coefficients_list[i] * i)
+            result_coefficients_list.append(fmult(self.poly_coefficients_list[i],i))
         return Polynomial(result_coefficients_list)
 
     def get_linear_root(self):
@@ -337,7 +356,7 @@ class Polynomial:
         if self.poly_coefficients_list[1] == 0:
             return None
 
-        root = (-1.0 * self.poly_coefficients_list[0]) / self.poly_coefficients_list[1]
+        root = fdiv(fmult(-1.0,self.poly_coefficients_list[0]),self.poly_coefficients_list[1])
         return root
 
     def get_tangent_line(self , x):
@@ -350,7 +369,7 @@ class Polynomial:
         """
 
         slope = self.poly_primer().evaluate(x)
-        y_intercept = slope * (0 - x) + self.evaluate(x)  # plug x = 0 into y = m(x - x1) + y1
+        y_intercept = fmult(slope, fmult(-1, x)) + self.evaluate(x)  # plug x = 0 into y = m(x - x1) + y1
         tangent_line = Polynomial([y_intercept , slope])  # representing tangent eq as my standard polynomial format
         x_intercept = tangent_line.get_linear_root()
 
@@ -402,11 +421,11 @@ class Polynomial:
         assert self.poly_roots is not None
 
         for exact_root in self.poly_roots:
-            if isclose(exact_root, approximate_root):
+            if fisclose(exact_root, approximate_root):
                 return exact_root
 
-            current_epsilon = abs(approximate_root - exact_root)
-            if closest_exact_root is None or closest_epsilon > current_epsilon:
+            current_epsilon = fabs(fsubt(approximate_root,exact_root))
+            if closest_exact_root is None or fisgreater(closest_epsilon,current_epsilon):
                 closest_exact_root = exact_root
                 closest_epsilon = current_epsilon
         # print("Closest Epsilon: {:.2e} | Closest Root: {:.2f}".format(closest_epsilon , closest_exact_root))
@@ -443,7 +462,7 @@ class Polynomial:
         step_number = 0
         first_step_with_no_progress = None
         steps_without_progress = 0
-        while not isclose(current_value , 0 , rel_tol = epsilon , abs_tol = epsilon):
+        while not fisclose(current_value , 0 , rel_tol = epsilon , abs_tol = epsilon):
             step_number += 1
             if step_number > max_steps:
                 break
@@ -459,16 +478,16 @@ class Polynomial:
             new_guess = new_guess_tangent.poly_roots[0]  # new_guess = x_intercept of tangent line
 
             # default isclose value is 1e-9 (a billionth)
-            if isclose(current_guess, new_guess , rel_tol = no_progress_threshold):
+            if fisclose(current_guess, new_guess , rel_tol = no_progress_threshold):
                 if minimum_adjustment is not None:
                     # force a nudge in the right direction
-                    new_guess = current_guess + math.copysign(minimum_adjustment , new_guess - current_guess)
+                    new_guess = fadd(current_guess, fcopysign(minimum_adjustment , fsubt(new_guess, current_guess)))
                 else:
                     if first_step_with_no_progress is None:
                         if debug:
                             print(
                                 "Failed to make progress on finding root after {} steps at x={:.5e} where y={:.5e}. Last update was {:.5e}. Poly: {}".format(
-                                    step_number , current_guess , current_value , current_guess - new_guess , self))
+                                    step_number , current_guess , current_value , fsubt(current_guess, new_guess), self))
                         first_step_with_no_progress = step_number
                     else:
                         steps_without_progress += 1
@@ -486,8 +505,8 @@ class Polynomial:
             if debug or (self.get_degree() == 1 and step_number == 5):
                 # If the degree is 1, it should have converged long before getting to step 5
                 print("Updating guess for {} time: from ({:g}+{:.12g} , {:.5g}) to ({:.5g} , {:.5g}) [delta_x={:e}] :: was notclose[{:e}]:: poly={} tangent={}"
-                      .format(step_number, np.trunc(previous_guess), previous_guess - np.trunc(previous_guess), previous_value, current_guess, current_value, current_guess-previous_guess, epsilon,  self, new_guess_tangent.poly_printer(coeff_format = "{}")))
-        if isclose(current_value, 0, abs_tol = epsilon):
+                      .format(step_number, np.trunc(previous_guess), fsubt(previous_guess,np.trunc(previous_guess)), previous_value, current_guess, current_value, fsubt(current_guess,previous_guess), epsilon,  self, new_guess_tangent.poly_printer(coeff_format = "{}")))
+        if fisclose(current_value, 0, abs_tol = epsilon):
             if debug:
                 print("Found root after {} steps at x={:.5e} where y={:.5e}. Poly: {}".format(
                     step_number, current_guess, current_value, self))
@@ -536,18 +555,20 @@ class Polynomial:
         :return: tuple[list[NewtonResult (successful roots)] , list[NewtonResult (failed roots)]]
         """
 
+        guest_range_min = wrap_float(guess_range_min)
+        guest_range_max = wrap_float(guess_range_max)
         if starting_guess_count is None:
             starting_guess_count = self.get_degree()
 
         # will be subbed in for the farthest relative extrema once that's built
         starting_guesses = []
         if not random_starting_guesses:
-            guess_increment = (guess_range_max - guess_range_min) / starting_guess_count
+            guess_increment = fdiv(fsubt(guess_range_max, guess_range_min), starting_guess_count)
             for i in range(starting_guess_count):
-                starting_guesses.append(guess_range_min + (i * guess_increment))
+                starting_guesses.append(fadd(guess_range_min, fmult(i, guess_increment)))
         else:
             for i in range(starting_guess_count):
-                starting_guesses.append(guess_range_min + (guess_range_max - guess_range_min) * random.random())  # generate a random float in the range
+                starting_guesses.append(fadd(guess_range_min, fmult(fsubt(guess_range_max, guess_range_min), random.random())))  # generate a random float in the range
 
         poly_roots = []
         failed_roots = []
@@ -589,13 +610,18 @@ class Polynomial:
         :return: triple[list[NewtonResult (successful roots)] , list[NewtonResult (failed roots)] , list[Polynomial (remainders)]]
         """
 
+        epsilon = wrap_float(epsilon)
+        guess_range_min = wrap_float(guess_range_min)
+        guess_range_max = wrap_float(guess_range_max)
+        no_progress_threshold = wrap_float(no_progress_threshold)
+
         calculated_poly_roots_set = []
         failed_roots = []
         remainders = []
         factored_poly = self
         attempts = 0
         while factored_poly.poly_degree > 0:
-            guess = guess_range_min + (guess_range_max - guess_range_min) * random.random()
+            guess = fadd(guess_range_min, fmult(fsubt(guess_range_max, guess_range_min), random.random()))
             newton_result = factored_poly.get_newton_root_from_point(guess, max_steps_per_root, epsilon, no_progress_threshold = no_progress_threshold, stop_when_no_progress = stop_when_no_progress, debug = debug)
             if newton_result.root_was_found:
                 found_root_x_value = newton_result.x_value
@@ -604,9 +630,9 @@ class Polynomial:
                     # print("Found root {:.3f} is closest to real root {:.3f} [diff={:g}]".format(found_root, matching_real_root, (matching_real_root-found_root)))
                     newton_result.associate_with_real_root(matching_real_root)
 
-                    factor = make_polynomial_from_coefficients(-1.0 * newton_result.associated_real_root , 1.0) if human_dividing else make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
+                    factor = make_polynomial_from_coefficients(fmult(-1.0, newton_result.associated_real_root , 1.0)) if human_dividing else make_polynomial_from_coefficients(fmult(-1.0, newton_result.x_value) , 1.0)
                 else:
-                    factor = make_polynomial_from_coefficients(-1.0 * newton_result.x_value , 1.0)
+                    factor = make_polynomial_from_coefficients(fmult(-1.0, newton_result.x_value) , 1.0)
                 factored_poly , factor_remainder = factored_poly.divide(factor)  # remainder's only returned; never used
                 if debug:
                     print("Factor         " , factor.poly_printer())
@@ -748,8 +774,8 @@ def randomly_build_a_binomial(rand_lower_bound = -BUILD_BINOMIAL_RANGE , rand_up
         while denominator == 0:
             denominator = random.randrange(rand_lower_bound , rand_upper_bound + 1)
 
-        root = position + (numerator / denominator)
-        result = Polynomial([(-root * denominator) , denominator] , [root])
+        root = fadd(position, fdiv(numerator, denominator))
+        result = Polynomial([fmult(-root, denominator) , denominator] , [root])
         return result
 
 

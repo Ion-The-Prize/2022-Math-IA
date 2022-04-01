@@ -19,17 +19,6 @@ import mplcursors
 BUILD_BINOMIAL_RANGE = 10
 
 
-def floatToString(f, format_string="{:.6f}"):
-    return format_string.format(f).rstrip('0').rstrip('.')
-
-
-def wrap_float(f):
-    """
-    All math-relevant floats are run through here to, perhaps, upgrade them to numpy.longdouble
-    """
-    return longdouble(f)
-
-
 class StatsAccumulator:
     def __init__(self , name):
         """
