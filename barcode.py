@@ -4,6 +4,8 @@ import graphics
 from graphics import *
 import random
 import numpy as np
+#Fix bug: https://github.com/aleju/imgaug/issues/537
+np.random.BitGenerator = np.random.bit_generator.BitGenerator
 import webcolors
 
 color_palette = list(webcolors.CSS21_NAMES_TO_HEX)

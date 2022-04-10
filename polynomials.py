@@ -8,6 +8,9 @@ import pandas
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
+#Fix bug: https://github.com/aleju/imgaug/issues/537
+np.random.BitGenerator = np.random.bit_generator.BitGenerator
+
 from numpy import longdouble
 from math import isclose
 from enum import Enum

@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 from numpy import longdouble
+#Fix bug: https://github.com/aleju/imgaug/issues/537
+np.random.BitGenerator = np.random.bit_generator.BitGenerator
+
 from math import isclose
 from enum import Enum
 from styleframe import StyleFrame, Styler, utils

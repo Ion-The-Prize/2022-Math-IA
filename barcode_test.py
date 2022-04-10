@@ -5,8 +5,8 @@ barcode2=barcode.BarCode("Testing2", -10, 15, 800, 200, 10)
 
 barcode1.close_on_click()
 
-barcode1.assign_color_number_to_item(-10, 0)
-barcode1.assign_color_number_to_item(5, 1)
+barcode1.assign_color_number_to_item(-10)
+barcode1.assign_color_number_to_item(5)
 i=0
 while barcode1.window_is_open():
   i += 1
